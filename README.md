@@ -53,7 +53,7 @@ const { service, utils, cli, configs, interfaces } = andb;
 
 ### Integration Examples
 
-See [examples/](examples/) directory for complete integration examples with AWS SSM.
+See [examples/](examples/) directory for complete integration examples with basic .env configuration.
 
 ## Architecture
 
@@ -68,7 +68,7 @@ See [examples/](examples/) directory for complete integration examples with AWS 
 - Migration tools for new/updated objects
 - Database monitoring
 - Multi-environment support (DEV/PROD)
-- AWS SSM integration for secure configuration management
+- Basic .env configuration support
 
 ## License
 
