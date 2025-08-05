@@ -1,0 +1,24 @@
+@startuml
+
+title Simple Export and Migration Process (DEV to PROD)
+
+actor "DevOps / DBA" as devOps
+database "DEV" as dev
+database "PRODUCTION" as prod
+participant "Git Repo" as git
+
+activate dev
+devOps -[#purple]> dev: Start migration process
+git <-[#blue] dev: Export DDL (from DEV)
+deactivate dev
+
+activate git
+activate prod
+git <-[#blue] prod: Export DDL (from PROD)
+git -[#purple]> git: Compare DDL (DEV and PROD)
+git -[#lime]> prod: Migrate (DEV to PROD)
+git <-[#lime]- prod: Backup DDL (PROD)
+deactivate git
+deactivate prod
+
+@enduml 
