@@ -1,7 +1,20 @@
+/**
+ * @anph/core - Database migration and comparison tool
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Core module for database migration, comparison and monitoring
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
+
 const utils = require('./utils')
-const cli = require('./cli')
-const { IDatabaseService, IDatabaseConfig } = require('./interfaces/database.interface')
+const commander = require('./service/commander')
+const configs = require('./configs')
+const interfaces = require('./interfaces')
 
 module.exports = {
-  utils, cli, interfaces: { IDatabaseService, IDatabaseConfig }
+  utils, commander, configs, interfaces
 }

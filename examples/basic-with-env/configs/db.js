@@ -3,7 +3,7 @@
  * Implementation of database interface
  */
 
-const andbCore = require('andb-core');
+const andbCore = require('@anph/core');
 const { IDatabaseService, IDatabaseConfig } = andbCore.interfaces;
 
 /**

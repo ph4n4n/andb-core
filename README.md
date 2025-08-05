@@ -1,11 +1,11 @@
-# andb-core
+# @anph/core
 
 Database migration and comparison tool by ph4n4n
 
 ## Installation
 
 ```bash
-npm install andb-core
+npm install @anph/core
 ```
 
 ## Usage
@@ -45,7 +45,7 @@ andb monitor -s status
 ### Programmatic
 
 ```javascript
-const andb = require('andb-core');
+const andb = require('@anph/core');
 
 // Use services
 const { service, utils, cli, configs, interfaces } = andb;
@@ -64,12 +64,52 @@ See [examples/](examples/) directory for complete integration examples with basi
 ## Features
 
 - Database object export (tables, procedures, functions, triggers)
-- Database comparison between environments
-- Migration tools for new/updated objects
+- Database comparison between 2 environments each time
+- Migration tools for new/updated/removed objects
 - Database monitoring
-- Multi-environment support (DEV/PROD)
+- Multi-environment support, for example (DEV/PROD) or (DEV/STAGE/PROD),...
 - Basic .env configuration support
 
-## License
+## 📁 Output Folder Structure
 
+### 🗄️ Database Schema Structure
+```
+📦 <environment>
+├── 📂 <schema>
+│   ├── 📄 current-ddl
+│   ├── ⚙️ functions
+│   └── 📊 tables
+└── 📂 preflow_40
+    ├── 💾 backup
+    │   ├── 📅 1_12_2024
+    │   │   ├── 🔧 procedures
+    │   │   ├── ⚙️ functions
+    │   │   └── 🔄 triggers
+    │   ├── ⚙️ functions
+    │   ├── 🔧 procedures
+    │   ├── 📊 tables
+    │   └── 🔄 triggers
+    ├── 📄 current-ddl
+    ├── ⚙️ functions
+    ├── 🔧 procedures
+    ├── 📊 tables
+    └── 🔄 triggers
+```
+
+### 🚀 Migration Map Structure
+```
+📦 map-migrate
+└── 📂 <source env>-to-<destination env>  ← <DEV>-to-<PROD>
+    └── 📂 <schema>
+        ├── ⚙️ functions
+        ├── 🔧 procedures
+        ├── 📊 tables
+        │   └── 🔄 alters
+        │       ├── 📋 columns
+        │       ├── 🔍 indexes
+        │       └── 🗑️ rmv-columns
+        └── 🔄 triggers
+```
+
+## License
 MIT 

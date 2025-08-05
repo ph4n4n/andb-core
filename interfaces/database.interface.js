@@ -1,6 +1,13 @@
 /**
- * Database configuration interfaces
- * Type definitions for database operations
+ * @anph/core Database Interfaces
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Database service and configuration interfaces
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
  */
 /**
  * Database service interface

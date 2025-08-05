@@ -1,4 +1,14 @@
-#!/usr/bin/env node
+/**
+ * @anph/core CLI - Command Line Interface
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description command line tool written for database migration, comparison and monitoring
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
 
 global.alog = require('alog-xyz')
   .getInstance({
@@ -22,9 +32,9 @@ module.exports = {
       REPORT,
       DDL: { TABLES, FUNCTIONS, PROCEDURES, TRIGGERS },
       STATUSES: { NEW, UPDATED, DEPRECATED, OTE }
-    } = require('./configs/constants');
+    } = require('../configs/constants');
 
-    const Container = require('./service/container');
+    const Container = require('./container');
     const container = new Container({
       getDBDestination,
       getSourceEnv,

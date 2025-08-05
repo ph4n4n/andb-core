@@ -1,3 +1,15 @@
+/**
+ * @anph/core Container Service
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Service container for dependency injection
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
+
 const ExporterService = require('./exporter');
 const ComparatorService = require('./comparator');
 const MigratorService = require('./migrator');

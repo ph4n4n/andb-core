@@ -1,3 +1,15 @@
+/**
+ * @anph/core Monitor Service - Database monitoring
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Service for monitoring database status
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
+
 const mysql = require('mysql2');
 const util = require("util");
 

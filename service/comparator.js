@@ -1,3 +1,14 @@
+/**
+ * @anph/core Comparator Service - Database comparison and migration
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Service for comparing and migrating database structures
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
 const fs = require('fs');
 const path = require('path');
 // Remove direct import of file helper

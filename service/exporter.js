@@ -1,3 +1,14 @@
+/**
+ * @anph/core Exporter Service - Database export
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Service for exporting database structures
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
 const mysql = require("mysql2");
 const {
   DDL: { TRIGGERS, TABLES, PROCEDURES, FUNCTIONS }

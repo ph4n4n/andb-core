@@ -1,4 +1,16 @@
 /**
+ * @anph/core Constants Configuration
+ * 
+ * @author ph4n4n
+ * @version 1.0.0
+ * @license MIT
+ * @description Application constants and configuration
+ * 
+ * Copyright (c) 2024 ph4n4n
+ * https://github.com/ph4n4n/@anph/core
+ */
+
+/**
  * @module constants
  * @description This module contains all the constants used in the application.
  */

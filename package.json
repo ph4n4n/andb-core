@@ -1,11 +1,8 @@
 {
-  "name": "andb-core",
+  "name": "@andb/core",
   "version": "1.0.0",
   "description": "Database migration and comparison tool by ph4n4n",
   "main": "index.js",
-  "bin": {
-    "andb": "./cli.js"
-  },
   "files": [
     "index.js",
     "cli.js",
@@ -22,15 +19,20 @@
     "prepublishOnly": "npm test"
   },
   "dependencies": {
-    "alog-xyz": "^2.0.0",
+    "@andb/logger": "^1.0.0",
     "commander": "^11.1.0",
     "diff": "^5.1.0",
-    "dotenv": "^16.3.1",
     "mysql2": "^3.6.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "eslint": "^8.57.1",
+    "globals": "^16.3.0",
+    "jest": "^30.0.4"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ph4n4n/andb-core.git"
+    "url": "git+https://github.com/ph4n4n/@anph/core.git"
   },
   "keywords": [
     "database",
@@ -39,7 +41,7 @@
     "mysql",
     "ddl",
     "andb",
-    "andb-core",
+    "@anph/core",
     "andb-cli",
     "ph4n4n",
     "mysql"
@@ -47,7 +49,7 @@
   "author": "ph4n4n",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ph4n4n/andb-core/issues"
+    "url": "https://github.com/ph4n4n/@anph/core/issues"
   },
-  "homepage": "https://github.com/ph4n4n/andb-core#readme"
+  "homepage": "https://github.com/ph4n4n/@anph/core#readme"
 }
