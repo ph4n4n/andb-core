@@ -72,5 +72,7 @@ class IDatabaseConfig {
 
 module.exports = {
   IDatabaseService,
-  IDatabaseConfig
-};
+  IDatabaseConfig,
+  DatabaseConfig: null, // TypeScript-like typedef
+  DatabaseFunctions: null // TypeScript-like typedef
+}; 

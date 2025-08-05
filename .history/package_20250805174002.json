@@ -20,7 +20,7 @@
     "prepublishOnly": "npm test"
   },
   "dependencies": {
-    "alog-xyz": "^2.0.0",
+    "alog-xyz": "^1.0.0",
     "commander": "^11.1.0",
     "diff": "^5.1.0",
     "mysql2": "^3.6.0"

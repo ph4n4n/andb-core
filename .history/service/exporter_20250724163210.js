@@ -292,7 +292,7 @@ module.exports = class ExporterService {
    */
   export(ddl) {
     return async (env) => {
-      alog.warn(`Start exporting ${ddl} changes for...`, env);
+      alog.warning(`Start exporting ${ddl} changes for...`, env);
       const labelTime = `..exported from ${env}.${this.getDBName(env)} success in:`;
       const dbConfig = this.getDBDestination(env);
       // Create a MySQL connection

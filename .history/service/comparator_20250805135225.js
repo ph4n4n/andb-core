@@ -679,14 +679,14 @@ module.exports = class ComparatorService {
   logDuplicateTriggerWarnings(warnings) {
     for (const warning of warnings) {
       const envType = warning.type === 'source_duplicates' ? 'SOURCE' : 'DESTINATION';
-      alog.warn(`⚠️  DUPLICATE TRIGGERS FOUND in ${envType} environment:`);
+      alog.warning(`⚠️  DUPLICATE TRIGGERS FOUND in ${envType} environment:`);
 
       for (const duplicate of warning.duplicates) {
-        alog.warn(`   Table: ${duplicate.tableName}`);
-        alog.warn(`   Event: ${duplicate.event} ${duplicate.timing}`);
-        alog.warn(`   Triggers (${duplicate.count}): ${duplicate.triggers.join(', ')}`);
-        alog.warn(`   ⚠️  Multiple triggers for same event may cause conflicts!`);
-        alog.warn('');
+        alog.warning(`   Table: ${duplicate.tableName}`);
+        alog.warning(`   Event: ${duplicate.event} ${duplicate.timing}`);
+        alog.warning(`   Triggers (${duplicate.count}): ${duplicate.triggers.join(', ')}`);
+        alog.warning(`   ⚠️  Multiple triggers for same event may cause conflicts!`);
+        alog.warning('');
       }
     }
   }
@@ -761,7 +761,7 @@ module.exports = class ComparatorService {
    */
   compare(ddl) {
     return async (env) => {
-      alog.warn(`Start comparing ${ddl} changes for...`, env);
+      alog.warning(`Start comparing ${ddl} changes for...`, env);
       const srcEnv = this.getSourceEnv(env);
       switch (ddl) {
         case FUNCTIONS:

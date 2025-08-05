@@ -63,7 +63,7 @@ module.exports = class MonitorService {
 
   monitor(field) {
     return async (env) => {
-      alog.warn(`Monitor ${field} for...`, env);
+      alog.warning(`Monitor ${field} for...`, env);
       const labelTime = `... showed from ${env}.${this.getDBName(env)} success in:`;
       const dbConfig = this.getDBDestination(env);
       // Create a MySQL connection

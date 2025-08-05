@@ -66,10 +66,10 @@ module.exports = class MigratorService {
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery, importQuery });
+            alog.warning('Experimental Run::', { dropQuery, importQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', functionName);
+            alog.warning('Dropped...', functionName);
 
             if (this.isNotMigrateCondition(functionName)) {
               continue;
@@ -147,11 +147,11 @@ module.exports = class MigratorService {
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
 
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery, importQuery });
+            alog.warning('Experimental Run::', { dropQuery, importQuery });
           } else {
             // Drop the procedure, import the new one, and create a backup
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', procedureName);
+            alog.warning('Dropped...', procedureName);
             if (this.isNotMigrateCondition(procedureName)) {
               continue;
             }
@@ -208,10 +208,10 @@ module.exports = class MigratorService {
           const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery, importQuery });
+            alog.warning('Experimental Run::', { dropQuery, importQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', triggerName);
+            alog.warning('Dropped...', triggerName);
             await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
             alog.info('Created...', triggerName, '\n');
             // copy to backup
@@ -258,10 +258,10 @@ module.exports = class MigratorService {
         for (const functionName of functionNames) {
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery });
+            alog.warning('Experimental Run::', { dropQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', functionName);
+            alog.warning('Dropped...', functionName);
             // soft delete
             this.fileManager.removeFile(destFolder, `${functionName}.sql`);
           }
@@ -318,10 +318,10 @@ module.exports = class MigratorService {
           const dropQuery = `DROP PROCEDURE IF EXISTS \`${procedureName}\`;`;
 
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery });
+            alog.warning('Experimental Run::', { dropQuery });
           } else {
             // Drop the procedure, import the new one, and create a backup
-            alog.warn('Dropped...', procedureName);
+            alog.warning('Dropped...', procedureName);
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
             // soft delete
             this.fileManager.removeFile(destFolder, `${procedureName}.sql`);
@@ -369,10 +369,10 @@ module.exports = class MigratorService {
       for (const triggerName of triggerNames) {
         const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
         if (+process.env.EXPERIMENTAL === 1) {
-          alog.warn('Experimental Run::', { dropQuery });
+          alog.warning('Experimental Run::', { dropQuery });
         } else {
           await util.promisify(destConnection.query).call(destConnection, dropQuery);
-          alog.warn('Dropped...', triggerName);
+          alog.warning('Dropped...', triggerName);
           // soft delete
           this.fileManager.removeFile(triggerFolder, `${triggerName}.sql`);
         }
@@ -426,7 +426,7 @@ module.exports = class MigratorService {
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
 
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { importQuery });
+            alog.warning('Experimental Run::', { importQuery });
           } else {
             console.log(importQuery);
             await util.promisify(destConnection.query).call(destConnection, importQuery);
@@ -479,7 +479,7 @@ module.exports = class MigratorService {
           }
           const alterQuery = this.fileManager.readFromFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('::Experimental Run::', { alterQuery });
+            alog.warning('::Experimental Run::', { alterQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, alterQuery);
             alog.info('Updated...', alterQuery);
@@ -574,7 +574,7 @@ module.exports = class MigratorService {
           for (let row of values) {
             const insertQuery = `INSERT INTO ${tableName} (${insertFields}) VALUES (${row.join(',')})`;
             if (+process.env.EXPERIMENTAL === 1) {
-              alog.warn('Experimental Run::', { insertQuery });
+              alog.warning('Experimental Run::', { insertQuery });
             } else {
               alog.info('Seeding...', insertQuery);
               await util.promisify(destConnection.query).call(destConnection, insertQuery);
@@ -604,7 +604,7 @@ module.exports = class MigratorService {
 
   migrate(ddl, fromList) {
     return (env) => {
-      alog.warn(`Start migrating ${fromList} ${ddl} changes for...`, env);
+      alog.warning(`Start migrating ${fromList} ${ddl} changes for...`, env);
       const start = Date.now();
       const dbConfig = this.getDBDestination(env);
       const destConnection = mysql.createConnection({
