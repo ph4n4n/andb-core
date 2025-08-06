@@ -75,7 +75,7 @@ module.exports = class MonitorService {
 
   monitor(field) {
     return async (env) => {
-      alog.warn(`Monitor ${field} for...`, env);
+      logger.warn(`Monitor ${field} for...`, env);
       const labelTime = `... showed from ${env}.${this.getDBName(env)} success in:`;
       const dbConfig = this.getDBDestination(env);
       // Create a MySQL connection
@@ -90,7 +90,7 @@ module.exports = class MonitorService {
       connection.connect(async (err) => {
         console.time(labelTime);
         if (err) {
-          alog.error("Error connecting to the database: ", err);
+          logger.error("Error connecting to the database: ", err);
           process.exit(1);
         }
         let rs;
@@ -116,7 +116,7 @@ module.exports = class MonitorService {
         }
         // Close the MySQL connection
         connection.end();
-        alog.info(`\nThere are ${rs} ${field} have been..`);
+        logger.info(`\nThere are ${rs} ${field} have been..`);
         console.timeEnd(labelTime);
       });
     };

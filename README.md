@@ -125,7 +125,7 @@ PROD_DB_USERNAME=prod_user
 PROD_DB_PASSWORD=prod_password
 PROD_DB_MAIL=prod_mail_db
 
-# Base directory for @andb/core operations
+# Base directory for andb-core operations
 BASE_DIR=/path/to/your/project 
 ```
 
@@ -143,14 +143,47 @@ node app.js migrate:new -p
 # Monitor database status
 node app.js monitor -s
 
-**Advance usage - generate script for package.json:**
-```
+**Advanced Usage - Generate Scripts for package.json:**
+```bash
+# Generate scripts with default environments
 node andb generate
+
+# Generate with custom environments
+node andb generate -e "DEV,PROD" -c "DEV,PROD" -m "PROD"
+
+# Or use npm scripts
+npm run generate
+npm run helper
 ```
 
+**Generated Scripts Examples:**
+```bash
+# Export commands
+npm run export:dev:fn          # Export functions from DEV
+npm run export:prod:sp          # Export procedures from PROD
+npm run export:dev              # Export all from DEV
+
+# Compare commands  
+npm run compare:prod:fn         # Compare functions in PROD
+npm run compare:prod:report     # Generate PROD report
+npm run compare:prod            # Full PROD comparison
+
+# Migrate commands
+npm run migrate:prod:new:fn     # Migrate new functions to PROD
+npm run migrate:prod:update     # Update all DDL in PROD
+npm run migrate:prod            # Full PROD migration
+
+# Deprecate commands
+npm run deprecate:prod:fn       # Deprecate functions in PROD
+npm run dep:prod:sp:ote         # Remove OTE procedures in PROD
 ```
 
-link to advance page here
+**Helper Commands:**
+```bash
+npm run helper                  # Show usage help
+npm run helper --list          # List all available scripts
+npm run helper --config        # Show current configuration
+```
 
 ### Integration Examples
 

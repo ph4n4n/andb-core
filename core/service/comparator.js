@@ -37,7 +37,7 @@ module.exports = class ComparatorService {
       const tableNameMatch = tableNameLine.match(/`([^`]+)`/);
 
       if (!tableNameMatch || tableNameMatch.length < 2) {
-        alog.error('Error parsing table name');
+        logger.error('Error parsing table name');
         return null;
       }
       const tableName = tableNameMatch[1];
@@ -69,7 +69,7 @@ module.exports = class ComparatorService {
           // Parse only non-empty lines inside column definitions
           const columnNameMatch = line.match(/`([^`]+)`/);
           if (!columnNameMatch || columnNameMatch.length < 2) {
-            alog.error('Error parsing column name');
+            logger.error('Error parsing column name');
             return null;
           }
           const columnName = columnNameMatch[1];
@@ -94,7 +94,7 @@ module.exports = class ComparatorService {
         indexes,
       };
     } catch (error) {
-      alog.error('Error parsing table definition:', error);
+      logger.error('Error parsing table definition:', error);
       return null;
     }
   }
@@ -111,7 +111,7 @@ module.exports = class ComparatorService {
       const triggerNameMatch = triggerNameLine?.match(/`([^`]+)`/);
 
       if (!triggerNameMatch || triggerNameMatch.length < 2) {
-        alog.error('Error parsing trigger name');
+        logger.error('Error parsing trigger name');
         return null;
       }
 
@@ -128,7 +128,7 @@ module.exports = class ComparatorService {
         definition: triggerSQL
       };
     } catch (error) {
-      alog.error('Error parsing trigger definition:', error);
+      logger.error('Error parsing trigger definition:', error);
       return null;
     }
   }
@@ -316,33 +316,33 @@ module.exports = class ComparatorService {
       }
 
       // Just report what changes would be made, no database connection needed
-      alog.info(`📋 Found ${alterColumnsList.length} tables with column changes`);
-      alog.info(`📋 Found ${alterIndexesList.length} tables with index changes`);
+      logger.info(`📋 Found ${alterColumnsList.length} tables with column changes`);
+      logger.info(`📋 Found ${alterIndexesList.length} tables with index changes`);
 
       if (alterColumnsList.length > 0) {
-        alog.info(`📋 Tables with column changes: ${alterColumnsList.join(', ')}`);
+        logger.info(`📋 Tables with column changes: ${alterColumnsList.join(', ')}`);
       }
       if (alterIndexesList.length > 0) {
-        alog.info(`📋 Tables with index changes: ${alterIndexesList.join(', ')}`);
+        logger.info(`📋 Tables with index changes: ${alterIndexesList.join(', ')}`);
       }
 
       // Log detailed changes for each table
       for (const tableName of alterColumnsList) {
         const alterSQL = this.checkDiffAndGenAlter(tableName, env);
         if (alterSQL.columns) {
-          alog.info(`📋 Column changes for ${tableName}: ${alterSQL.columns}`);
+          logger.info(`📋 Column changes for ${tableName}: ${alterSQL.columns}`);
         }
       }
 
       for (const tableName of alterIndexesList) {
         const alterSQL = this.checkDiffAndGenAlter(tableName, env);
         if (alterSQL.indexes) {
-          alog.info(`📋 Index changes for ${tableName}: ${alterSQL.indexes}`);
+          logger.info(`📋 Index changes for ${tableName}: ${alterSQL.indexes}`);
         }
       }
 
     } catch (error) {
-      alog.error('Error in reportTableStructureChange:', error);
+      logger.error('Error in reportTableStructureChange:', error);
     }
   }
 
@@ -522,7 +522,7 @@ module.exports = class ComparatorService {
 
       if (!srcLines.length) return;
 
-      alog.info('Comparing...', srcLines.length, '->', destLines.length, ddlType);
+      logger.info('Comparing...', srcLines.length, '->', destLines.length, ddlType);
 
       // Handle triggers specially
       if (ddlType === TRIGGERS) {
@@ -537,7 +537,7 @@ module.exports = class ComparatorService {
       // Generate reports
       await this.generateReports(destEnv, { ...newDDL, ...deprecatedDDL, ...updatedDDL });
     } catch (error) {
-      alog.error('Error in reportDLLChange:', error);
+      logger.error('Error in reportDLLChange:', error);
     }
   }
 
@@ -551,7 +551,7 @@ module.exports = class ComparatorService {
       // Load trigger content specifically
       const { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS);
 
-      alog.info('Comparing triggers...', srcLines.length, '->', destLines.length);
+      logger.info('Comparing triggers...', srcLines.length, '->', destLines.length);
 
       // Handle trigger comparison
       await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder);
@@ -564,7 +564,7 @@ module.exports = class ComparatorService {
       // Generate reports
       await this.generateReports(destEnv, { ...newTriggers, ...deprecatedTriggers, ...updatedTriggers });
     } catch (error) {
-      alog.error('Error in reportTriggerChange:', error);
+      logger.error('Error in reportTriggerChange:', error);
     }
   }
 
@@ -690,14 +690,14 @@ module.exports = class ComparatorService {
   logDuplicateTriggerWarnings(warnings) {
     for (const warning of warnings) {
       const envType = warning.type === 'source_duplicates' ? 'SOURCE' : 'DESTINATION';
-      alog.warn(`⚠️  DUPLICATE TRIGGERS FOUND in ${envType} environment:`);
+      logger.warn(`⚠️  DUPLICATE TRIGGERS FOUND in ${envType} environment:`);
 
       for (const duplicate of warning.duplicates) {
-        alog.warn(`   Table: ${duplicate.tableName}`);
-        alog.warn(`   Event: ${duplicate.event} ${duplicate.timing}`);
-        alog.warn(`   Triggers (${duplicate.count}): ${duplicate.triggers.join(', ')}`);
-        alog.warn(`   ⚠️  Multiple triggers for same event may cause conflicts!`);
-        alog.warn('');
+        logger.warn(`   Table: ${duplicate.tableName}`);
+        logger.warn(`   Event: ${duplicate.event} ${duplicate.timing}`);
+        logger.warn(`   Triggers (${duplicate.count}): ${duplicate.triggers.join(', ')}`);
+        logger.warn(`   ⚠️  Multiple triggers for same event may cause conflicts!`);
+        logger.warn('');
       }
     }
   }
@@ -706,7 +706,7 @@ module.exports = class ComparatorService {
     const reportFolder = `${mapMigrateFolder}/triggers`;
     this.fileManager.makeSureFolderExisted(reportFolder);
     this.fileManager.saveToFile(reportFolder, 'trigger-changes.json', JSON.stringify(triggerChanges, null, 2));
-    alog.info('Trigger changes found:', triggerChanges.length);
+    logger.info('Trigger changes found:', triggerChanges.length);
   }
 
   async processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, destEnv) {
@@ -718,12 +718,12 @@ module.exports = class ComparatorService {
   }
 
   logNewDDLStats(newDDL, ddlType) {
-    alog.info('New..........', Object.entries(newDDL)
+    logger.info('New..........', Object.entries(newDDL)
       .filter(([k]) => k.includes('_new'))
       .reduce((total, [k, v]) => total + v, 0));
 
     if (ddlType in [PROCEDURES, FUNCTIONS]) {
-      alog.info('OTE..........', Object.entries(newDDL)
+      logger.info('OTE..........', Object.entries(newDDL)
         .filter(([k]) => k.includes('_ote'))
         .reduce((total, [k, v]) => total + v, 0));
     }
@@ -732,7 +732,7 @@ module.exports = class ComparatorService {
   async processUpdatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
     const updatedDDL = await this.markChangeDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, srcEnv, destEnv);
     if (updatedDDL) {
-      alog.info('Updated......', Object.values(updatedDDL).reduce((total, n) => total + n, 0));
+      logger.info('Updated......', Object.values(updatedDDL).reduce((total, n) => total + n, 0));
     }
     return updatedDDL;
   }
@@ -740,7 +740,7 @@ module.exports = class ComparatorService {
   async processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType) {
     const deprecatedDDL = await this.markDeprecatedDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType);
     if (deprecatedDDL) {
-      alog.info('Deprecated...', Object.values(deprecatedDDL).reduce((total, n) => total + n, 0));
+      logger.info('Deprecated...', Object.values(deprecatedDDL).reduce((total, n) => total + n, 0));
     }
     return deprecatedDDL;
   }
@@ -772,7 +772,7 @@ module.exports = class ComparatorService {
    */
   compare(ddl) {
     return async (env) => {
-      alog.warn(`Start comparing ${ddl} changes for...`, env);
+      logger.warn(`Start comparing ${ddl} changes for...`, env);
       const srcEnv = this.getSourceEnv(env);
       switch (ddl) {
         case FUNCTIONS:

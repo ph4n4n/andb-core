@@ -22,7 +22,7 @@ module.exports = {
     logName
   }) => {
     // init logger
-    global.alog = require('andb-logger')
+    global.logger = require('andb-logger')
       .getInstance({
         mode: process.env.MODE || 'PROD',
         dirpath: __dirname,

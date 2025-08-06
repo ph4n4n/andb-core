@@ -59,7 +59,7 @@ module.exports = class ExporterService {
       const triggerQuery = "SHOW TRIGGERS";
       connection.query(triggerQuery, async (err, triggerResults) => {
         if (err) {
-          alog.error("Error retrieving triggers: ", err);
+          logger.error("Error retrieving triggers: ", err);
           connection.end();
           reject(err);
           return;
@@ -85,7 +85,7 @@ module.exports = class ExporterService {
 
             this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
           } catch (error) {
-            alog.error(`Error exporting trigger ${triggerName}:`, error);
+            logger.error(`Error exporting trigger ${triggerName}:`, error);
           }
         }
         return resolve(triggerResults.length);
@@ -113,7 +113,7 @@ module.exports = class ExporterService {
         [dbConfig.database],
         async function (err, functionResults) {
           if (err) {
-            alog.error("Error retrieving functions: ", err);
+            logger.error("Error retrieving functions: ", err);
             connection.end();
             reject(err);
             return;
@@ -163,7 +163,7 @@ module.exports = class ExporterService {
         [dbConfig.database],
         async (err, procedureResults) => {
           if (err) {
-            alog.error("Error retrieving procedures: ", err);
+            logger.error("Error retrieving procedures: ", err);
             connection.end();
             reject(err);
             return;
@@ -207,7 +207,7 @@ module.exports = class ExporterService {
       const tableQuery = "SHOW TABLES";
       connection.query(tableQuery, async (err, tableResults) => {
         if (err) {
-          alog.error("Error retrieving tables: ", err);
+          logger.error("Error retrieving tables: ", err);
           connection.end();
           reject(err);
           return;
@@ -303,7 +303,7 @@ module.exports = class ExporterService {
    */
   export(ddl) {
     return async (env) => {
-      alog.warn(`Start exporting ${ddl} changes for...`, env);
+      logger.warn(`Start exporting ${ddl} changes for...`, env);
       const labelTime = `..exported from ${env}.${this.getDBName(env)} success in:`;
       const dbConfig = this.getDBDestination(env);
       // Create a MySQL connection
@@ -318,7 +318,7 @@ module.exports = class ExporterService {
       connection.connect(async (err) => {
         console.time(labelTime);
         if (err) {
-          alog.error("Error connecting to the database: ", err);
+          logger.error("Error connecting to the database: ", err);
           process.exit(1);
         }
         // Retrieve the list of DDL
@@ -339,7 +339,7 @@ module.exports = class ExporterService {
         }
         // Close the MySQL connection
         connection.end();
-        alog.info(`\nThere are ${rs} ${ddl} have been..`);
+        logger.info(`\nThere are ${rs} ${ddl} have been..`);
         console.timeEnd(labelTime);
       });
     };

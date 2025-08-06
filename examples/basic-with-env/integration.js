@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { cli } = require('@andb/core');
+const { cli } = require('andb-core');
 
 const {
   getDBDestination,

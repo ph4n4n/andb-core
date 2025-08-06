@@ -52,7 +52,7 @@ class FileManager {
     const filePath = path.join(this.baseDir, folder, fileName);
     if (typeof content !== 'string') {
       const error = new Error(`Invalid content for file ${filePath}`);
-      alog.error(error);
+      logger.error(error);
       throw error;
     }
     if (folder.indexOf(this.baseDir) == -1) {
@@ -107,7 +107,7 @@ class FileManager {
         }
       }
     } catch (err) {
-      alog.error(`Error cleaning folder ${folder}: `, err);
+      logger.error(`Error cleaning folder ${folder}: `, err);
     }
   }
 
@@ -117,7 +117,7 @@ class FileManager {
       const filePath = path.join(this.baseDir, folder, fileName);
       fs.unlinkSync(filePath);
     } catch (err) {
-      alog.error(`Error cleaning file ${fileName}: `, err);
+      logger.error(`Error cleaning file ${fileName}: `, err);
     }
   }
 }

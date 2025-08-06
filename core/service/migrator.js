@@ -64,7 +64,7 @@ module.exports = class MigratorService {
 
       // Check if there are functions to migrate
       if (!functionNames.length) {
-        alog.dev(`No FUNCTION to migrate to ${dbConfig.envName}`);
+        logger.dev(`No FUNCTION to migrate to ${dbConfig.envName}`);
         return 0;
       }
       if (+process.env.EXPERIMENTAL < 1) {
@@ -77,16 +77,16 @@ module.exports = class MigratorService {
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery, importQuery });
+            logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', functionName);
+            logger.warn('Dropped...', functionName);
 
             if (this.isNotMigrateCondition(functionName)) {
               continue;
             }
             await util.promisify(destConnection.query).call(destConnection, importQuery);
-            alog.info('Created...', functionName, '\n');
+            logger.info('Created...', functionName, '\n');
             // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
             // copy to soft migrate
@@ -105,11 +105,11 @@ module.exports = class MigratorService {
           // Rollback the transaction in case of an error
           await util.promisify(destConnection.rollback).call(destConnection);
         }
-        alog.error(`Error during migration: `, err);
+        logger.error(`Error during migration: `, err);
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading functions-migrate.list: ', err);
+      logger.error('Error reading functions-migrate.list: ', err);
       return 0;
     }
   }
@@ -143,7 +143,7 @@ module.exports = class MigratorService {
       const procedureNames = this.fileManager.readFromFile(spFolder, spList, 1)
       // Check if there are procedures to migrate
       if (!procedureNames?.length) {
-        alog.dev(`No PROCEDURE to migrate to ${dbConfig.envName}`);
+        logger.dev(`No PROCEDURE to migrate to ${dbConfig.envName}`);
         return 0;
       }
       // Start a transaction if experimental flag is not set
@@ -158,17 +158,17 @@ module.exports = class MigratorService {
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
 
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery, importQuery });
+            logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
             // Drop the procedure, import the new one, and create a backup
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', procedureName);
+            logger.warn('Dropped...', procedureName);
             if (this.isNotMigrateCondition(procedureName)) {
               continue;
             }
 
             await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
-            alog.info('Created...', procedureName, '\n');
+            logger.info('Created...', procedureName, '\n');
             // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
             // copy to soft migrate
@@ -187,11 +187,11 @@ module.exports = class MigratorService {
         if (+process.env.EXPERIMENTAL < 1) {
           await util.promisify(destConnection.rollback).call(destConnection);
         }
-        alog.error(`Error during migration: `, err);
+        logger.error(`Error during migration: `, err);
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading procedures-migrate.list: ', err);
+      logger.error('Error reading procedures-migrate.list: ', err);
       return 0;
     }
   }
@@ -207,7 +207,7 @@ module.exports = class MigratorService {
       const triggerList = `${fromList}.list`;
       const triggerNames = this.fileManager.readFromFile(triggerFolder, triggerList, 1);
       if (!triggerNames?.length) {
-        alog.dev(`No TRIGGER to migrate to ${dbConfig.envName}`);
+        logger.dev(`No TRIGGER to migrate to ${dbConfig.envName}`);
         return 0;
       }
       if (+process.env.EXPERIMENTAL < 1) {
@@ -219,12 +219,12 @@ module.exports = class MigratorService {
           const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery, importQuery });
+            logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', triggerName);
+            logger.warn('Dropped...', triggerName);
             await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
-            alog.info('Created...', triggerName, '\n');
+            logger.info('Created...', triggerName, '\n');
             // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
             // copy to soft migrate
@@ -235,11 +235,11 @@ module.exports = class MigratorService {
         if (+process.env.EXPERIMENTAL < 1) {
           await util.promisify(destConnection.rollback).call(destConnection);
         }
-        alog.error(`Error during migration: `, err);
+        logger.error(`Error during migration: `, err);
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading triggers-migrate.list: ', err);
+      logger.error('Error reading triggers-migrate.list: ', err);
       return 0;
     }
   }
@@ -258,7 +258,7 @@ module.exports = class MigratorService {
       const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${FUNCTIONS}`;
       const functionNames = this.fileManager.readFromFile(fnFolder, fnList, 1);
       if (!functionNames.length) {
-        alog.dev(`No FUNCTION to deprecated to ${dbConfig.envName}`);
+        logger.dev(`No FUNCTION to deprecated to ${dbConfig.envName}`);
         return 0;
       }
       if (+process.env.EXPERIMENTAL < 1) {
@@ -269,10 +269,10 @@ module.exports = class MigratorService {
         for (const functionName of functionNames) {
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery });
+            logger.warn('Experimental Run::', { dropQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            alog.warn('Dropped...', functionName);
+            logger.warn('Dropped...', functionName);
             // soft delete
             this.fileManager.removeFile(destFolder, `${functionName}.sql`);
           }
@@ -289,11 +289,11 @@ module.exports = class MigratorService {
           // Rollback the transaction in case of an error
           await util.promisify(destConnection.rollback).call(destConnection);
         }
-        alog.error(`Error during migration: `, err);
+        logger.error(`Error during migration: `, err);
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading functions-migrate.list: ', err);
+      logger.error('Error reading functions-migrate.list: ', err);
       return 0;
     }
   }
@@ -316,7 +316,7 @@ module.exports = class MigratorService {
       const procedureNames = this.fileManager.readFromFile(spFolder, spList, 1);
       // Check if there are procedures to migrate
       if (!procedureNames?.length) {
-        alog.dev(`No PROCEDURE to deprecated to ${dbConfig.envName}`);
+        logger.dev(`No PROCEDURE to deprecated to ${dbConfig.envName}`);
         return 0;
       }
       // Start a transaction if experimental flag is not set
@@ -329,10 +329,10 @@ module.exports = class MigratorService {
           const dropQuery = `DROP PROCEDURE IF EXISTS \`${procedureName}\`;`;
 
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { dropQuery });
+            logger.warn('Experimental Run::', { dropQuery });
           } else {
             // Drop the procedure, import the new one, and create a backup
-            alog.warn('Dropped...', procedureName);
+            logger.warn('Dropped...', procedureName);
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
             // soft delete
             this.fileManager.removeFile(destFolder, `${procedureName}.sql`);
@@ -350,11 +350,11 @@ module.exports = class MigratorService {
         if (+process.env.EXPERIMENTAL < 1) {
           await util.promisify(destConnection.rollback).call(destConnection);
         }
-        alog.error(`Error during migration: `, err);
+        logger.error(`Error during migration: `, err);
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading procedures-migrate.list: ', err);
+      logger.error('Error reading procedures-migrate.list: ', err);
       return 0;
     }
   }
@@ -370,7 +370,7 @@ module.exports = class MigratorService {
     const triggerFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${TRIGGERS}`;
     const triggerNames = this.fileManager.readFromFile(triggerFolder, triggerList, 1);
     if (!triggerNames?.length) {
-      alog.dev(`No TRIGGER to deprecated to ${dbConfig.envName}`);
+      logger.dev(`No TRIGGER to deprecated to ${dbConfig.envName}`);
       return 0;
     }
     if (+process.env.EXPERIMENTAL < 1) {
@@ -380,16 +380,16 @@ module.exports = class MigratorService {
       for (const triggerName of triggerNames) {
         const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
         if (+process.env.EXPERIMENTAL === 1) {
-          alog.warn('Experimental Run::', { dropQuery });
+          logger.warn('Experimental Run::', { dropQuery });
         } else {
           await util.promisify(destConnection.query).call(destConnection, dropQuery);
-          alog.warn('Dropped...', triggerName);
+          logger.warn('Dropped...', triggerName);
           // soft delete
           this.fileManager.removeFile(triggerFolder, `${triggerName}.sql`);
         }
       }
     } catch (err) {
-      alog.error('Error reading triggers-migrate.list: ', err);
+      logger.error('Error reading triggers-migrate.list: ', err);
       return 0;
     }
   }
@@ -401,7 +401,7 @@ module.exports = class MigratorService {
         .call(connection, `SHOW TABLES LIKE ?`, [tableName]);
       return rows?.length > 0;
     } catch (err) {
-      alog.error(`Error checking if table ${tableName} exists:`, err);
+      logger.error(`Error checking if table ${tableName} exists:`, err);
       return false;
     }
   }
@@ -414,7 +414,7 @@ module.exports = class MigratorService {
       const tblList = `${NEW}.list`;
       const tableNames = this.fileManager.readFromFile(tblFolder, tblList, 1);
       if (!tableNames?.length) {
-        alog.dev(`No TABLE to migrate to ${dbConfig.envName}`);
+        logger.dev(`No TABLE to migrate to ${dbConfig.envName}`);
         return 0;
       }
       let tablesMigrated = 0;
@@ -430,18 +430,18 @@ module.exports = class MigratorService {
           const fileName = `${tableName}.sql`;
 
           if (await this.isTableExists(destConnection, tableName)) {
-            alog.dev(`Table ${tableName} already exists in the destination database.`);
+            logger.dev(`Table ${tableName} already exists in the destination database.`);
             continue;
           }
 
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
 
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('Experimental Run::', { importQuery });
+            logger.warn('Experimental Run::', { importQuery });
           } else {
             console.log(importQuery);
             await util.promisify(destConnection.query).call(destConnection, importQuery);
-            alog.info('Created...', tableName, '\n');
+            logger.info('Created...', tableName, '\n');
           }
           tablesMigrated++;
         }
@@ -456,12 +456,12 @@ module.exports = class MigratorService {
         if (+process.env.EXPERIMENTAL < 1) {
           // Rollback the transaction in case of an error
           await util.promisify(destConnection.rollback).call(destConnection);
-          alog.error(`Error during table migration:`, err);
+          logger.error(`Error during table migration:`, err);
         }
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading tables-migrate.list:', err);
+      logger.error('Error reading tables-migrate.list:', err);
       return 0;
     }
   }
@@ -473,7 +473,7 @@ module.exports = class MigratorService {
       const tableNames = this.fileManager.readFromFile(tableMap, `alter-${alterType}.list`, 1);
 
       if (!tableNames?.length) {
-        alog.dev(`No TABLE to alter for ${dbConfig.envName}`);
+        logger.dev(`No TABLE to alter for ${dbConfig.envName}`);
         return 0;
       }
       let tablesAltered = 0;
@@ -485,15 +485,15 @@ module.exports = class MigratorService {
       try {
         for (const tableName of tableNames) {
           if (!(await this.isTableExists(destConnection, tableName))) {
-            alog.dev(`Table ${tableName} does not exist in the destination database.`);
+            logger.dev(`Table ${tableName} does not exist in the destination database.`);
             continue;
           }
           const alterQuery = this.fileManager.readFromFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
           if (+process.env.EXPERIMENTAL === 1) {
-            alog.warn('::Experimental Run::', { alterQuery });
+            logger.warn('::Experimental Run::', { alterQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, alterQuery);
-            alog.info('Updated...', alterQuery);
+            logger.info('Updated...', alterQuery);
             this.fileManager.removeFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
           }
           tablesAltered++;
@@ -510,11 +510,11 @@ module.exports = class MigratorService {
           // Rollback the transaction in case of an error
           await util.promisify(destConnection.rollback).call(destConnection);
         }
-        alog.error(`Error during table alteration:`, err);
+        logger.error(`Error during table alteration:`, err);
         return 0;
       }
     } catch (err) {
-      alog.error('Error reading tables/alters.list:', err);
+      logger.error('Error reading tables/alters.list:', err);
       return 0;
     }
   }
@@ -528,19 +528,19 @@ module.exports = class MigratorService {
 
 
       if (!tableNames?.length) {
-        alog.dev(`No TABLE to seed to ${dbConfig.envName}`);
+        logger.dev(`No TABLE to seed to ${dbConfig.envName}`);
         return 0;
       }
       let tablesSeeded = 0;
       for (const tableName of tableNames) {
         // check if table exists in destination db
         if (!(await this.isTableExists(destConnection, tableName))) {
-          alog.info(`Table ${tableName} does not exist in the destination database.`);
+          logger.info(`Table ${tableName} does not exist in the destination database.`);
           continue;
         }
         // check if table exists in source db
         if (!(await this.isTableExists(sourceConnection, tableName))) {
-          alog.info(`Table ${tableName} does not exist in the source database.`);
+          logger.info(`Table ${tableName} does not exist in the source database.`);
           continue;
         }
 
@@ -551,7 +551,7 @@ module.exports = class MigratorService {
 
         // check is dest data empty
         if (destData.length) {
-          alog.info(`Table ${tableName} already seeded in the destination database.`);
+          logger.info(`Table ${tableName} already seeded in the destination database.`);
           continue;
         }
 
@@ -585,9 +585,9 @@ module.exports = class MigratorService {
           for (let row of values) {
             const insertQuery = `INSERT INTO ${tableName} (${insertFields}) VALUES (${row.join(',')})`;
             if (+process.env.EXPERIMENTAL === 1) {
-              alog.warn('Experimental Run::', { insertQuery });
+              logger.warn('Experimental Run::', { insertQuery });
             } else {
-              alog.info('Seeding...', insertQuery);
+              logger.info('Seeding...', insertQuery);
               await util.promisify(destConnection.query).call(destConnection, insertQuery);
             }
           };
@@ -600,14 +600,14 @@ module.exports = class MigratorService {
             // Rollback the transaction in case of an error
             await util.promisify(destConnection.rollback).call(destConnection);
           }
-          alog.error(`Error during seeding data:`, err);
+          logger.error(`Error during seeding data:`, err);
         }
         tablesSeeded++;
       }
 
       return tablesSeeded;
     } catch (err) {
-      alog.error('Error reading tables-migrate.list:', err);
+      logger.error('Error reading tables-migrate.list:', err);
       return 0;
     }
   }
@@ -615,7 +615,7 @@ module.exports = class MigratorService {
 
   migrate(ddl, fromList) {
     return (env) => {
-      alog.warn(`Start migrating ${fromList} ${ddl} changes for...`, env);
+      logger.warn(`Start migrating ${fromList} ${ddl} changes for...`, env);
       const start = Date.now();
       const dbConfig = this.getDBDestination(env);
       const destConnection = mysql.createConnection({
@@ -627,7 +627,7 @@ module.exports = class MigratorService {
       });
       destConnection.connect(err => {
         if (err) {
-          alog.error('Error connecting to the database: ', err);
+          logger.error('Error connecting to the database: ', err);
           process.exit(1);
         }
         (async () => {
@@ -659,7 +659,7 @@ module.exports = class MigratorService {
                 alterRs = await this.alterTableColumns(destConnection, dbConfig);
                 alterRs += await this.alterTableColumns(destConnection, dbConfig, 'indexes');
               }
-              alog.dev(`Alter ${alterRs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
+              logger.dev(`Alter ${alterRs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
               break;
             case TRIGGERS:
               if (fromList === DEPRECATED) {
@@ -670,7 +670,7 @@ module.exports = class MigratorService {
               break;
           }
           destConnection.end();
-          alog.dev(`Migrate ${rs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
+          logger.dev(`Migrate ${rs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
         })();
       });
     };

@@ -1,5 +1,5 @@
 // Mock alog globally
-global.alog = { error: jest.fn(), warning: jest.fn(), info: jest.fn(), dev: jest.fn() };
+global.logger = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), dev: jest.fn() };
 const ComparatorService = require('../core/service/comparator');
 
 const mockFileManager = {
@@ -88,7 +88,7 @@ describe('ComparatorService', () => {
     expect(result).toContain('DROP COLUMN old_column');
   });
 
-  test('compare trả về function', () => {
+  test('compare returns function', () => {
     const comparator = createComparator();
     const fn = comparator.compare('TABLES');
     expect(typeof fn).toBe('function');

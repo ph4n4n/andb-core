@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 jest.mock('fs');
-jest.mock('alog-xyz', () => ({ error: jest.fn() }));
-const FileManager = require('../utils/file.helper');
+jest.mock('andb-logger', () => ({ error: jest.fn() }));
+const FileManager = require('../core/utils/file.helper');
 
 describe('FileManager', () => {
   const testBaseDir = '/test/base/dir';

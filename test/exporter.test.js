@@ -1,4 +1,4 @@
-const ExporterService = require('../service/exporter');
+const ExporterService = require('../core/service/exporter');
 
 const mockFileManager = {
   makeSureFolderExisted: jest.fn(),
@@ -33,7 +33,7 @@ describe('ExporterService', () => {
     expect(exporter.appendReport).toBe(mockAppendReport);
   });
 
-  test('makeDDLFolderReady gọi đúng các hàm fileManager', () => {
+  test('makeDDLFolderReady calls fileManager functions correctly', () => {
     const exporter = createExporter();
     const path = exporter.makeDDLFolderReady('db/DEV/mockdb', 'TABLES');
     expect(mockFileManager.makeSureFolderExisted).toHaveBeenCalledWith('db/DEV/mockdb/TABLES');
@@ -44,7 +44,7 @@ describe('ExporterService', () => {
     expect(path).toBe('db/DEV/mockdb/TABLES');
   });
 
-  test('appendDDL gọi đúng fileManager', () => {
+  test('appendDDL calls fileManager correctly', () => {
     const exporter = createExporter();
     mockFileManager.readFromFile.mockReturnValue(['a']);
     exporter.appendDDL('DEV', 'folder', 'TABLES', 'b', 'sql');
@@ -53,7 +53,7 @@ describe('ExporterService', () => {
     expect(mockFileManager.saveToFile).toHaveBeenCalledWith('folder', 'b.sql', 'sql');
   });
 
-  test('export trả về function', () => {
+  test('export returns function', () => {
     const exporter = createExporter();
     const fn = exporter.export('TABLES');
     expect(typeof fn).toBe('function');

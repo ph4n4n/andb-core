@@ -15,7 +15,7 @@
     "diagram/"
   ],
   "scripts": {
-    "test": "node test/*.test.js",
+    "test": "jest",
     "prepublishOnly": "npm test",
     "andb": "node scripts/andb.js",
     "generate": "node scripts/andb.js generate",

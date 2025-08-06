@@ -1,6 +1,6 @@
 const jestMock = () => jest.fn(() => jest.fn());
 
-jest.mock('../utils/file.helper', () => {
+jest.mock('../core/utils/file.helper', () => {
   const mockFileManagerInstance = {
     readFromFile: jest.fn(),
     saveToFile: jest.fn(),
@@ -20,7 +20,7 @@ const mockReportHelper = {
   report2html: jest.fn(),
   vimDiffToHtml: jest.fn()
 };
-jest.mock('../utils/report.helper', () => ({
+jest.mock('../core/utils/report.helper', () => ({
   createReportHelper: jest.fn(() => mockReportHelper)
 }));
 
@@ -50,26 +50,26 @@ describe('Container DI System', () => {
     };
   });
 
-  test('khởi tạo và lấy config', () => {
+  test('initializes and gets config', () => {
     const container = new Container(config);
     expect(container.get('baseDir')).toBe('/test/base/dir');
     expect(container.get('dbUtilFn')).toMatchObject({ getDBDestination: config.getDBDestination });
   });
 
-  test('lấy fileManager là singleton', () => {
+  test('gets fileManager as singleton', () => {
     const container = new Container(config);
     const fm1 = container.get('fileManager');
     const fm2 = container.get('fileManager');
     expect(fm1).toBe(fm2);
   });
 
-  test('lấy reportHelper đúng', () => {
+  test('gets reportHelper correctly', () => {
     const container = new Container(config);
     const rh = container.get('reportHelper');
     expect(rh).toBe(mockReportHelper);
   });
 
-  test('exporter trả về function và gọi đúng', () => {
+  test('exporter returns function and calls correctly', () => {
     const container = new Container(config);
     const exporter = container.get('exporter');
     expect(typeof exporter).toBe('function');
@@ -77,7 +77,7 @@ describe('Container DI System', () => {
     expect(mockExport).toHaveBeenCalledWith('TABLES');
   });
 
-  test('comparator trả về function và gọi đúng', () => {
+  test('comparator returns function and calls correctly', () => {
     const container = new Container(config);
     const comparator = container.get('comparator');
     expect(typeof comparator).toBe('function');
@@ -85,7 +85,7 @@ describe('Container DI System', () => {
     expect(mockCompare).toHaveBeenCalledWith('TABLES');
   });
 
-  test('migrator trả về function và gọi đúng', () => {
+  test('migrator returns function and calls correctly', () => {
     const container = new Container(config);
     const migrator = container.get('migrator');
     expect(typeof migrator).toBe('function');
@@ -93,7 +93,7 @@ describe('Container DI System', () => {
     expect(mockMigrate).toHaveBeenCalledWith('TABLES', 'status');
   });
 
-  test('monitor trả về function và gọi đúng', () => {
+  test('monitor returns function and calls correctly', () => {
     const container = new Container(config);
     const monitor = container.get('monitor');
     expect(typeof monitor).toBe('function');
@@ -101,7 +101,7 @@ describe('Container DI System', () => {
     expect(mockMonitor).toHaveBeenCalledWith('field');
   });
 
-  test('getServices trả về đủ các service', () => {
+  test('getServices returns all services', () => {
     const container = new Container(config);
     const services = container.getServices();
     expect(Object.keys(services)).toEqual(
@@ -114,12 +114,12 @@ describe('Container DI System', () => {
     expect(services.reportHelper).toBe(mockReportHelper);
   });
 
-  test('gọi service không tồn tại sẽ throw', () => {
+  test('calling non-existent service throws', () => {
     const container = new Container(config);
     expect(() => container.get('unknown')).toThrow(/not found/);
   });
 
-  test('không circular dependency khi gọi getServices', () => {
+  test('no circular dependency when calling getServices', () => {
     const container = new Container(config);
     expect(() => container.getServices()).not.toThrow();
   });

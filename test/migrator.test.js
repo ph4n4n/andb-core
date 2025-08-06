@@ -1,6 +1,6 @@
 // Mock alog globally
-global.alog = { error: jest.fn(), warning: jest.fn(), info: jest.fn(), dev: jest.fn() };
-const MigratorService = require('../service/migrator');
+global.logger = { error: jest.fn(), warning: jest.fn(), info: jest.fn(), dev: jest.fn() };
+const MigratorService = require('../core/service/migrator');
 
 const mockFileManager = {
   makeSureFolderExisted: jest.fn(),
@@ -50,13 +50,13 @@ describe('MigratorService', () => {
     expect(migrator.isNotMigrateCondition('normal_function')).toBe(false);
   });
 
-  test('migrate trả về function', () => {
+  test('migrate returns function', () => {
     const migrator = createMigrator();
     const fn = migrator.migrate('FUNCTIONS', 'NEW');
     expect(typeof fn).toBe('function');
   });
 
-  test('migrateFunctions gọi đúng fileManager', async () => {
+  test('migrateFunctions calls fileManager correctly', async () => {
     const migrator = createMigrator();
     mockFileManager.readFromFile.mockReturnValue(['func1', 'func2']);
     mockFileManager.readFromFile.mockReturnValueOnce('DROP FUNCTION IF EXISTS `func1`;');
@@ -83,7 +83,7 @@ describe('MigratorService', () => {
     expect(result).toBeGreaterThan(0);
   }, 10000);
 
-  test('migrateProcedures gọi đúng fileManager', async () => {
+  test('migrateProcedures call fileManager correctly', async () => {
     const migrator = createMigrator();
     mockFileManager.readFromFile.mockReturnValue(['proc1']);
     mockFileManager.readFromFile.mockReturnValueOnce('DROP PROCEDURE IF EXISTS `proc1`;');
