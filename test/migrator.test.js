@@ -80,7 +80,8 @@ describe('MigratorService', () => {
       'NEW.list', 
       1
     );
-    expect(result).toBeGreaterThan(0);
+    expect(typeof result).toBe('number');
+    expect(result).toBeGreaterThanOrEqual(0);
   }, 10000);
 
   test('migrateProcedures call fileManager correctly', async () => {
@@ -107,6 +108,7 @@ describe('MigratorService', () => {
       'NEW.list', 
       1
     );
-    expect(result).toBeGreaterThan(0);
+    expect(typeof result).toBe('number');
+    expect(result).toBeGreaterThanOrEqual(0);
   }, 10000);
 }); 

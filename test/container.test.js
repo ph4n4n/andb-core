@@ -25,15 +25,15 @@ jest.mock('../core/utils/report.helper', () => ({
 }));
 
 const mockExport = jest.fn();
-jest.mock('../service/exporter', () => jest.fn().mockImplementation(() => ({ export: mockExport })));
+jest.mock('../core/service/exporter', () => jest.fn().mockImplementation(() => ({ export: mockExport })));
 const mockCompare = jest.fn();
-jest.mock('../service/comparator', () => jest.fn().mockImplementation(() => ({ compare: mockCompare })));
+jest.mock('../core/service/comparator', () => jest.fn().mockImplementation(() => ({ compare: mockCompare })));
 const mockMigrate = jest.fn();
-jest.mock('../service/migrator', () => jest.fn().mockImplementation(() => ({ migrate: mockMigrate })));
+jest.mock('../core/service/migrator', () => jest.fn().mockImplementation(() => ({ migrate: mockMigrate })));
 const mockMonitor = jest.fn();
-jest.mock('../service/monitor', () => jest.fn().mockImplementation(() => ({ monitor: mockMonitor })));
+jest.mock('../core/service/monitor', () => jest.fn().mockImplementation(() => ({ monitor: mockMonitor })));
 
-const Container = require('../service/container');
+const Container = require('../core/service/container');
 
 describe('Container DI System', () => {
   let config;
