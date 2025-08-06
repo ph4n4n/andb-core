@@ -10,10 +10,10 @@
  * https://github.com/ph4n4n/@anph/core
  */
 
-const utils = require('./utils')
-const commander = require('./service/commander')
-const configs = require('./configs')
-const interfaces = require('./interfaces')
+const utils = require('./core/utils')
+const commander = require('./core/cli')
+const configs = require('./core/configs')
+const interfaces = require('./core/interfaces')
 
 module.exports = {
   utils, commander, configs, interfaces

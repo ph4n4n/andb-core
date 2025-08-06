@@ -10,12 +10,12 @@
  * https://github.com/ph4n4n/@anph/core
  */
 
-global.alog = require('alog-xyz')
+global.alog = require('andb-logger')
   .getInstance({
     mode: process.env.MODE || 'PROD',
     dirpath: __dirname,
-    logName: 'FLoDB'
-  });
+    logName: 'FLoDB',
+  })
 
 module.exports = {
   build: ({
@@ -32,9 +32,9 @@ module.exports = {
       REPORT,
       DDL: { TABLES, FUNCTIONS, PROCEDURES, TRIGGERS },
       STATUSES: { NEW, UPDATED, DEPRECATED, OTE }
-    } = require('../configs/constants');
+    } = require('./configs/constants');
 
-    const Container = require('./container');
+    const Container = require('./service/container');
     const container = new Container({
       getDBDestination,
       getSourceEnv,

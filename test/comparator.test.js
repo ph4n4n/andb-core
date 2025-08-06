@@ -1,6 +1,6 @@
 // Mock alog globally
 global.alog = { error: jest.fn(), warning: jest.fn(), info: jest.fn(), dev: jest.fn() };
-const ComparatorService = require('../service/comparator');
+const ComparatorService = require('../core/service/comparator');
 
 const mockFileManager = {
   makeSureFolderExisted: jest.fn(),

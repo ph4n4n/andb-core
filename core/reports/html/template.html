@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src *; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'">
+  <title>COMPARE RESULT: {{ENV}}</title>
+  <style>
+    .highcharts-figure,
+    .highcharts-data-table table {
+      min-width: 310px;
+      max-width: 800px;
+      margin: 1em auto;
+    }
+
+    #container {
+      height: 400px;
+    }
+
+    .highcharts-data-table table {
+      font-family: Verdana, sans-serif;
+      border-collapse: collapse;
+      border: 1px solid #ebebeb;
+      margin: 10px auto;
+      text-align: center;
+      width: 100%;
+      max-width: 500px;
+    }
+
+    .highcharts-data-table caption {
+      padding: 1em 0;
+      font-size: 1.2em;
+      color: #555;
+    }
+
+    .highcharts-data-table th {
+      font-weight: 600;
+      padding: 0.5em;
+    }
+
+    .highcharts-data-table td,
+    .highcharts-data-table th,
+    .highcharts-data-table caption {
+      padding: 0.5em;
+    }
+
+    .highcharts-data-table thead tr,
+    .highcharts-data-table tr:nth-child(even) {
+      background: #f8f8f8;
+    }
+
+    .highcharts-data-table tr:hover {
+      background: #f1f7ff;
+    }
+
+    .ddl-wrapper {
+      display: inline-block;
+      width: 100%;
+      padding: 15px;
+    }
+
+    .ddl-wrapper .ddl-pane {
+      width: 30%;
+      float: left;
+    }
+
+    .ddl-wrapper .ddl-pane:not(:last-child) {
+      margin-right: 15px;
+      padding: 0;
+    }
+
+    .ddl-wrapper .ddl-pane pre {
+      border: solid 1px #f1f7ff;
+    }
+  </style>
+  <script src="./html/libs/highcharts.js"></script>
+  <script src="./html/libs/modules/exporting.js"></script>
+  <script src="./html/libs/modules/export-data.js"></script>
+  <script src="./html/libs/modules/accessibility.js"></script>
+  <script src="./html/libs/highlight.min.js"></script>
+  <link rel="stylesheet" href="./html/libs/highlight.min.css">
+</head>
+
+<body>
+
+  <figure class="highcharts-figure">
+    <div id="container"></div>
+  </figure>
+
+  <div class="grid function">
+    <h3>FUNCTIONS</h3>
+    <div class="ddl-wrapper">
+      <div class="ddl-pane">
+        <h4>New</h4>
+        <ul>{{FUNCTION_NEW}}</ul>
+      </div>
+
+      <div class="ddl-pane">
+        <h4>Updated</h4>
+        <ul>{{FUNCTION_UPDATE}}</ul>
+      </div>
+
+      <div class="ddl-pane">
+        <h4>Deprecated</h4>
+        <ul>{{FUNCTION_DEPRECATED}}</ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid procedure">
+    <h3>PROCEDURES</h3>
+    <div class="ddl-wrapper">
+      <div class="ddl-pane">
+        <h4>New</h4>
+        <ul>{{PROCEDURE_NEW}}</ul>
+      </div>
+
+      <div class="ddl-pane">
+        <h4>Updated</h4>
+        <ul>{{PROCEDURE_UPDATE}}</ul>
+      </div>
+
+      <div class="ddl-pane">
+        <h4>Deprecated</h4>
+        <ul>{{PROCEDURE_DEPRECATED}}</ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid table">
+    <h3>TABLES</h3>
+    <div style="{{STYLE4MISSING}}">
+      <h3>TABLES MISSING COLUMNS</h3>
+      <pre>
+      <code class="json">{{MISSING_COLUMNS}}</code>
+   </pre>
+    </div>
+    <div class="ddl-wrapper">
+      <div class="ddl-pane">
+        <h4>New</h4>
+        <ul>{{TABLE_NEW}}</ul>
+      </div>
+
+      <div class="ddl-pane">
+        <h4>Updated</h4>
+        <ul>{{TABLE_UPDATE}}</ul>
+      </div>
+
+      <div class="ddl-pane">
+        <h4>Deprecated</h4>
+        <ul>{{TABLE_DEPRECATED}}</ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    const chart = Highcharts.chart('container', {
+      chart: {
+        type: 'bar'
+      },
+      title: {
+        text: 'COMPARE RESULT: {{ENV}}',
+        align: 'left'
+      },
+      xAxis: {
+        categories: ['Functions', 'Procedures', 'Tables', 'Columns', 'Indexes'],
+        title: {
+          text: null
+        },
+        gridLineWidth: 1,
+        lineWidth: 0
+      },
+      yAxis: {
+        min: 0,
+        title: {
+          text: 'Quantity',
+          align: 'high'
+        },
+        labels: {
+          overflow: 'justify'
+        },
+        gridLineWidth: 0
+      },
+      tooltip: {
+        valueSuffix: ''
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: '50%',
+          dataLabels: {
+            enabled: true
+          },
+          groupPadding: 0.1
+        }
+      },
+      legend: {
+        layout: 'vertical',
+        align: 'right',
+        verticalAlign: 'top',
+        x: -40,
+        y: 80,
+        floating: true,
+        borderWidth: 1,
+        backgroundColor:
+          Highcharts.defaultOptions.legend.backgroundColor || '#FFFFFF',
+        shadow: true
+      },
+      credits: {
+        enabled: false
+      },
+      series: [
+        {
+          name: 'Total',
+          data: JSON.parse('{{TOTAL_DDL}}')
+        }, {
+          name: 'New',
+          data: JSON.parse('{{NEW_DDL}}')
+        }, {
+          name: 'Updated',
+          data: JSON.parse('{{UPDATED_DDL}}')
+        }, {
+          name: 'Deprecated',
+          data: JSON.parse('{{DEPRECATED_DDL}}')
+        }]
+    });
+
+    chart.update({
+      exporting: {
+        showTable: !chart.options.exporting.showTable
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', (event) => {
+      document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightBlock(block);
+      });
+    });
+  </script>
+</body>
+
+</html>

@@ -1,5 +1,5 @@
 {
-  "name": "@andb/core",
+  "name": "andb-core",
   "version": "1.0.0",
   "description": "Database migration and comparison tool by ph4n4n",
   "main": "index.js",
@@ -16,10 +16,13 @@
   ],
   "scripts": {
     "test": "node test/*.test.js",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "andb": "node scripts/andb.js",
+    "generate": "node scripts/andb.js generate",
+    "helper": "node scripts/andb.js helper"
   },
   "dependencies": {
-    "@andb/logger": "^1.0.0",
+    "andb-logger": "^1.0.2",
     "commander": "^11.1.0",
     "diff": "^5.1.0",
     "mysql2": "^3.6.0"

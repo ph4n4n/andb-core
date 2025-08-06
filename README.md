@@ -45,11 +45,112 @@ andb monitor -s status
 ### Programmatic
 
 ```javascript
+// 1. import
 const andb = require('@anph/core');
 
-// Use services
-const { service, utils, cli, configs, interfaces } = andb;
+// 2. Use services
+const { service, utils, commander, interfaces } = andb;
+
+// 3. implement interface
+class MyDatabaseService extends interfaces.IDatabaseService {
+  getDBDestination(env, mail = false) {
+    const configs = {
+      DEV: {
+        host: process.env.DEV_DB_HOST,
+        database: process.env.DEV_DB_NAME,
+        user: process.env.DEV_DB_USER,
+        password: process.env.DEV_DB_PASS
+      },
+      PROD: {
+        host: process.env.PROD_DB_HOST,
+        database: process.env.PROD_DB_NAME,
+        user: process.env.PROD_DB_USER,
+        password: process.env.PROD_DB_PASS
+      }
+    };
+    return configs[env.toUpperCase()];
+  }
+
+  getSourceEnv(envName) {
+    return envName === 'PROD' ? 'DEV' : 'DEV';
+  }
+
+  getDestEnv(env) {
+    return env === 'DEV' ? 'PROD' : 'PROD';
+  }
+
+  getDBName(env, isDbMail = false) {
+    return process.env[`${env}_DB_NAME`];
+  }
+
+  replaceWithEnv(ddl, destEnv) {
+    return destEnv === 'PROD' 
+      ? ddl.replace(/@dev\.com/g, '@prod.com')
+      : ddl;
+  }
+}
+
+// 4. enjoy it
+const dbService = new MyDatabaseService();
+
+// Build CLI with your implementation
+const cli = commander.build({
+  getDBDestination: dbService.getDBDestination.bind(dbService),
+  getSourceEnv: dbService.getSourceEnv.bind(dbService),
+  getDestEnv: dbService.getDestEnv.bind(dbService),
+  getDBName: dbService.getDBName.bind(dbService),
+  replaceWithEnv: dbService.replaceWithEnv.bind(dbService),
+  ENVIRONMENTS: { DEV: 'DEV', PROD: 'PROD' },
+  baseDir: process.cwd()
+});
+
+// Parse CLI arguments
+cli.parse(process.argv);
 ```
+
+**Environment Setup:**
+```bash
+# .env
+# Database Configuration for DEV
+DEV_DB_HOST=localhost
+DEV_DB_NAME=dev_database
+DEV_DB_USERNAME=root
+DEV_DB_PASSWORD=password
+DEV_DB_MAIL=dev_mail_db
+
+# Database Configuration for PROD
+PROD_DB_HOST=prod-server.com
+PROD_DB_NAME=prod_database
+PROD_DB_USERNAME=prod_user
+PROD_DB_PASSWORD=prod_password
+PROD_DB_MAIL=prod_mail_db
+
+# Base directory for @andb/core operations
+BASE_DIR=/path/to/your/project 
+```
+
+**Usage Examples:**
+```bash
+# Export tables from DEV
+node app.js export -t
+
+# Compare functions between DEV and PROD
+node app.js compare -f
+
+# Migrate new procedures to PROD
+node app.js migrate:new -p
+
+# Monitor database status
+node app.js monitor -s
+
+**Advance usage - generate script for package.json:**
+```
+node andb generate
+```
+
+```
+
+link to advance page here
 
 ### Integration Examples
 
