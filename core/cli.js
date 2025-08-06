@@ -10,13 +10,6 @@
  * https://github.com/ph4n4n/@anph/core
  */
 
-global.alog = require('andb-logger')
-  .getInstance({
-    mode: process.env.MODE || 'PROD',
-    dirpath: __dirname,
-    logName: 'FLoDB',
-  })
-
 module.exports = {
   build: ({
     getDBDestination,
@@ -25,8 +18,17 @@ module.exports = {
     getDBName,
     replaceWithEnv,
     ENVIRONMENTS,
-    baseDir
+    baseDir,
+    logName
   }) => {
+    // init logger
+    global.alog = require('andb-logger')
+      .getInstance({
+        mode: process.env.MODE || 'PROD',
+        dirpath: __dirname,
+        logName: logName || 'ANDB-CORE',
+      })
+
     const { Command } = require('commander');
     const {
       REPORT,
@@ -112,7 +114,7 @@ module.exports = {
       .action((options) => {
         const path = require('path');
         const scriptPath = path.join(__dirname, 'scripts', 'generator.js');
-        
+
         // Set environment variables from CLI options
         if (options.environments) {
           process.env.ANDB_ENVIRONMENTS = options.environments;
@@ -123,7 +125,7 @@ module.exports = {
         if (options.migrateEnvs) {
           process.env.ANDB_MIGRATE_ENVIRONMENTS = options.migrateEnvs;
         }
-        
+
         // Set global context for scripts
         global.ANDB_BASE_DIR = baseDir;
         global.ANDB_CONTEXT = {
@@ -135,7 +137,7 @@ module.exports = {
           replaceWithEnv,
           ENVIRONMENTS
         };
-        
+
         require(scriptPath);
       });
 
@@ -149,7 +151,7 @@ module.exports = {
       .action((options) => {
         const path = require('path');
         const scriptPath = path.join(__dirname, 'scripts', 'helper.js');
-        
+
         // Set global context for scripts
         global.ANDB_BASE_DIR = baseDir;
         global.ANDB_CONTEXT = {
@@ -161,7 +163,7 @@ module.exports = {
           replaceWithEnv,
           ENVIRONMENTS
         };
-        
+
         // Pass arguments to helper script
         const args = process.argv.slice(3); // Remove 'node', 'andb.js', 'helper'
         if (options.list) {
@@ -170,11 +172,11 @@ module.exports = {
         if (options.config) {
           args.unshift('--config');
         }
-        
+
         // Set process.argv for helper script
         const originalArgv = process.argv;
         process.argv = ['node', scriptPath, ...args];
-        
+
         try {
           require(scriptPath);
         } finally {
