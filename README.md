@@ -25,7 +25,7 @@ andb migrate:new -p procedures
 - ✅ **Environment Comparison** - Compare between DEV/STAGE/PROD
 - ✅ **Migration Tools** - New/Update/Remove objects
 - ✅ **Script Generator** - Auto-generate npm scripts
-- ✅ **Multi-Environment** - Support DEV/STAGE/PROD workflows
+- ✅ **Multi-Environment** - Support DEV/PROD workflows (extensible)
 
 ## 📚 Documentation
 
@@ -84,6 +84,12 @@ PROD_DB_HOST=prod-server.com
 PROD_DB_NAME=prod_database
 PROD_DB_USER=prod_user
 PROD_DB_PASS=prod_password
+
+# 💡 Extend with more environments
+# STAGE_DB_HOST=stage-server.com
+# STAGE_DB_NAME=stage_database
+# STAGE_DB_USER=stage_user
+# STAGE_DB_PASS=stage_password
 ```
 
 ## 📊 Output Structure
@@ -136,7 +142,7 @@ andb migrate:new -p procedures
 - ✅ **So sánh môi trường** - Compare giữa DEV/STAGE/PROD
 - ✅ **Công cụ Migration** - New/Update/Remove objects
 - ✅ **Script Generator** - Tự động sinh npm scripts
-- ✅ **Đa môi trường** - Hỗ trợ workflow DEV/STAGE/PROD
+- ✅ **Đa môi trường** - Hỗ trợ workflow DEV/PROD (có thể mở rộng)
 
 ## 📚 Tài liệu
 
@@ -161,13 +167,15 @@ Tự động sinh npm scripts cho workflow:
 npm run generate
 
 # Tùy chỉnh môi trường
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" npm run generate
+ANDB_ENVIRONMENTS="DEV,PROD" npm run generate
+
+# 💡 Mở rộng với nhiều môi trường
+# ANDB_ENVIRONMENTS="DEV,STAGE,PROD" npm run generate
 
 # Scripts được tạo
 npm run export:dev:fn      # Export functions từ DEV
 npm run compare:prod:sp    # Compare procedures trong PROD
-npm run migrate:stage:new  # Migrate new objects lên STAGE
-```
+npm run migrate:prod:new   # Migrate new objects lên PROD
 
 📖 **Tài liệu**: [GENERATOR.md](docs/GENERATOR.md) | [GENERATOR_EN.md](docs/GENERATOR_EN.md)
 
@@ -195,6 +203,12 @@ PROD_DB_HOST=prod-server.com
 PROD_DB_NAME=prod_database
 PROD_DB_USER=prod_user
 PROD_DB_PASS=prod_password
+
+# 💡 Mở rộng với nhiều môi trường
+# STAGE_DB_HOST=stage-server.com
+# STAGE_DB_NAME=stage_database
+# STAGE_DB_USER=stage_user
+# STAGE_DB_PASS=stage_password
 ```
 
 ## 📊 Cấu trúc output
@@ -221,4 +235,42 @@ PROD_DB_PASS=prod_password
 
 ## 📄 License
 
-MIT License - xem file [LICENSE](LICENSE) 
+MIT License - xem file [LICENSE](LICENSE)
+
+---
+
+## 🔧 Mở rộng tùy chỉnh
+
+### Thêm môi trường mới
+
+```bash
+# Thêm STAGE environment
+export ANDB_ENVIRONMENTS="DEV,STAGE,PROD"
+export ANDB_COMPARE_ENVIRONMENTS="DEV,STAGE,PROD"
+export ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD"
+
+# Cấu hình database cho STAGE
+STAGE_DB_HOST=stage-server.com
+STAGE_DB_NAME=stage_database
+STAGE_DB_USER=stage_user
+STAGE_DB_PASS=stage_password
+```
+
+### Workflow với nhiều môi trường
+
+```bash
+# DEV → STAGE → PROD workflow
+npm run export:dev
+npm run compare:stage
+npm run migrate:stage:new
+npm run compare:stage:migrated
+npm run migrate:prod:new
+```
+
+### Tùy chỉnh theo nhu cầu
+
+- **DEV** - Development environment
+- **STAGE** - Staging environment  
+- **UAT** - User Acceptance Testing
+- **TEST** - Testing environment
+- **PROD** - Production environment 

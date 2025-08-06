@@ -20,24 +20,26 @@ npm run generate
 
 ```bash
 # Customize all environments
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" node andb generate
+ANDB_ENVIRONMENTS="DEV,PROD" node andb generate
 
 # Customize compare environments
 ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" node andb generate
 
 # Customize migrate environments
-ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD" node andb generate
+ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
 
 # Combine multiple options
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
+ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
 ```
 
 ## Default Configuration
 
 ### Environments
-- **All**: `LOCAL`, `DEV`, `UAT`, `STAGE`, `PROD`
-- **Compare**: All except `LOCAL`
-- **Migrate**: All except `LOCAL`, `DEV`
+- **All**: `DEV`, `PROD`
+- **Compare**: `DEV`, `PROD`
+- **Migrate**: `PROD`
+
+> 💡 **Note**: Can be extended with custom environments like `STAGE`, `UAT`, `TEST` based on project needs.
 
 ### DDL Types
 - `fn` - Functions
@@ -176,11 +178,11 @@ CLI options > CLI context > Default values
 
 ## Real Examples
 
-### Setup for DEV → STAGE → PROD
+### Setup for DEV → PROD
 
 ```bash
-# Generate scripts for 3 environments
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD" node andb generate
+# Generate scripts for 2 environments
+ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
 ```
 
 ### Typical Workflow
@@ -189,17 +191,14 @@ ANDB_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,STAGE,PROD" AN
 # 1. Export from DEV
 npm run export:dev
 
-# 2. Compare DEV with STAGE
-npm run compare:stage
+# 2. Compare DEV with PROD
+npm run compare:prod
 
-# 3. Migrate new objects to STAGE
-npm run migrate:stage:new
+# 3. Migrate new objects to PROD
+npm run migrate:prod:new
 
-# 4. Test on STAGE
-npm run compare:stage:migrated
-
-# 5. Migrate to PROD
-npm run migrate:prod
+# 4. Test on PROD
+npm run compare:prod:migrated
 ```
 
 ## Troubleshooting

@@ -125,11 +125,10 @@ andb helper --config
 ## Environment Options
 
 ### Default Environments
-- `LOCAL` - Local development
 - `DEV` - Development environment
-- `UAT` - User Acceptance Testing
-- `STAGE` - Staging environment
 - `PROD` - Production environment
+
+> 💡 **Lưu ý**: Có thể tùy chỉnh thêm môi trường khác như `STAGE`, `UAT`, `TEST` tùy theo nhu cầu project.
 
 ### Custom Environments
 ```bash

@@ -125,11 +125,10 @@ andb helper --config
 ## Environment Options
 
 ### Default Environments
-- `LOCAL` - Local development
 - `DEV` - Development environment
-- `UAT` - User Acceptance Testing
-- `STAGE` - Staging environment
 - `PROD` - Production environment
+
+> 💡 **Note**: Can be customized with additional environments like `STAGE`, `UAT`, `TEST` based on project needs.
 
 ### Custom Environments
 ```bash

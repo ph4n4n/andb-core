@@ -20,24 +20,26 @@ npm run generate
 
 ```bash
 # Tùy chỉnh tất cả môi trường
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" node andb generate
+ANDB_ENVIRONMENTS="DEV,PROD" node andb generate
 
 # Tùy chỉnh môi trường compare
 ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" node andb generate
 
 # Tùy chỉnh môi trường migrate
-ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD" node andb generate
+ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
 
 # Kết hợp nhiều tùy chọn
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
+ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
 ```
 
 ## Cấu hình mặc định
 
 ### Môi trường
-- **Tất cả**: `LOCAL`, `DEV`, `UAT`, `STAGE`, `PROD`
-- **Compare**: Tất cả trừ `LOCAL`
-- **Migrate**: Tất cả trừ `LOCAL`, `DEV`
+- **Tất cả**: `DEV`, `PROD`
+- **Compare**: `DEV`, `PROD`
+- **Migrate**: `PROD`
+
+> 💡 **Lưu ý**: Có thể mở rộng tùy chỉnh thêm môi trường khác như `STAGE`, `UAT`, `TEST` tùy theo nhu cầu project.
 
 ### Loại DDL
 - `fn` - Functions
@@ -176,11 +178,11 @@ CLI options > CLI context > Default values
 
 ## Ví dụ thực tế
 
-### Setup cho DEV → STAGE → PROD
+### Setup cho DEV → PROD
 
 ```bash
-# Tạo scripts cho 3 môi trường
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD" node andb generate
+# Tạo scripts cho 2 môi trường
+ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_ENVIRONMENTS="PROD" node andb generate
 ```
 
 ### Workflow điển hình
@@ -189,17 +191,14 @@ ANDB_ENVIRONMENTS="DEV,STAGE,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,STAGE,PROD" AN
 # 1. Export từ DEV
 npm run export:dev
 
-# 2. Compare DEV với STAGE
-npm run compare:stage
+# 2. Compare DEV với PROD
+npm run compare:prod
 
-# 3. Migrate new objects lên STAGE
-npm run migrate:stage:new
+# 3. Migrate new objects lên PROD
+npm run migrate:prod:new
 
-# 4. Test trên STAGE
-npm run compare:stage:migrated
-
-# 5. Migrate lên PROD
-npm run migrate:prod
+# 4. Test trên PROD
+npm run compare:prod:migrated
 ```
 
 ## Troubleshooting
