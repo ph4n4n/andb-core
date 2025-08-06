@@ -1,507 +1,160 @@
-# @anph/core
+# andb-core
 
 Database migration and comparison tool by ph4n4n
 
 ## 🌍 Language / Ngôn ngữ
 
-- 🇺🇸 [English](#installation) (Default)
-- 🇻🇳 [Tiếng Việt](#installation-1) (Vietnamese version below)
+- 🇺🇸 [English](#quick-start)
+- 🇻🇳 [Tiếng Việt](#quick-start-1)
 
-## Installation
-
-```bash
-npm install @anph/core
-```
-
-## Usage
-
-### CLI
+## Quick Start
 
 ```bash
-# Export database objects
+# Install
+npm install andb-core
+
+# Basic usage
 andb export -t tables
-andb export -p procedures
-andb export -f functions
-andb export -tr triggers
-
-# Compare database objects
-andb compare -t tables
-andb compare -p procedures
 andb compare -f functions
-andb compare -tr triggers
-
-# Migrate new objects
-andb migrate:new -t tables
 andb migrate:new -p procedures
-
-# Update existing objects
-andb migrate:update -t tables
-andb migrate:update -p procedures
-
-# Deprecate objects
-andb deprecate -p procedures
-andb deprecate -f functions
-
-# Monitor database
-andb monitor -p processlist
-andb monitor -s status
 ```
 
-### Programmatic
+## 🚀 Features
 
-```javascript
-// 1. import
-const andb = require('@anph/core');
+- ✅ **Database Export** - Tables, Procedures, Functions, Triggers
+- ✅ **Environment Comparison** - Compare between DEV/STAGE/PROD
+- ✅ **Migration Tools** - New/Update/Remove objects
+- ✅ **Script Generator** - Auto-generate npm scripts
+- ✅ **Multi-Environment** - Support DEV/STAGE/PROD workflows
 
-// 2. Use services
-const { service, utils, commander, interfaces } = andb;
+## 📚 Documentation
 
-// 3. implement interface
-class MyDatabaseService extends interfaces.IDatabaseService {
-  getDBDestination(env, mail = false) {
-    const configs = {
-      DEV: {
-        host: process.env.DEV_DB_HOST,
-        database: process.env.DEV_DB_NAME,
-        user: process.env.DEV_DB_USER,
-        password: process.env.DEV_DB_PASS
-      },
-      PROD: {
-        host: process.env.PROD_DB_HOST,
-        database: process.env.PROD_DB_NAME,
-        user: process.env.PROD_DB_USER,
-        password: process.env.PROD_DB_PASS
-      }
-    };
-    return configs[env.toUpperCase()];
-  }
+### 🇺🇸 English
+- 📖 [CLI Usage](docs/CLI_EN.md) - Complete CLI commands
+- 📖 [Script Generator](docs/GENERATOR_EN.md) - Auto-generate npm scripts
+- 📖 [Integration Guide](docs/INTEGRATION_EN.md) - Programmatic usage
+- 📖 [Examples](examples/) - Ready-to-use examples
 
-  getSourceEnv(envName) {
-    return envName === 'PROD' ? 'DEV' : 'DEV';
-  }
+### 🇻🇳 Tiếng Việt  
+- 📖 [Hướng dẫn CLI](docs/CLI.md) - Lệnh CLI đầy đủ
+- 📖 [Script Generator](docs/GENERATOR.md) - Tự động sinh npm scripts
+- 📖 [Hướng dẫn tích hợp](docs/INTEGRATION.md) - Sử dụng programmatic
+- 📖 [Ví dụ](examples/) - Ví dụ sẵn sàng sử dụng
 
-  getDestEnv(env) {
-    return env === 'DEV' ? 'PROD' : 'PROD';
-  }
+## 🛠️ Script Generator
 
-  getDBName(env, isDbMail = false) {
-    return process.env[`${env}_DB_NAME`];
-  }
-
-  replaceWithEnv(ddl, destEnv) {
-    return destEnv === 'PROD' 
-      ? ddl.replace(/@dev\.com/g, '@prod.com')
-      : ddl;
-  }
-}
-
-// 4. enjoy it
-const dbService = new MyDatabaseService();
-
-// Build CLI with your implementation
-const cli = commander.build({
-  getDBDestination: dbService.getDBDestination.bind(dbService),
-  getSourceEnv: dbService.getSourceEnv.bind(dbService),
-  getDestEnv: dbService.getDestEnv.bind(dbService),
-  getDBName: dbService.getDBName.bind(dbService),
-  replaceWithEnv: dbService.replaceWithEnv.bind(dbService),
-  ENVIRONMENTS: { DEV: 'DEV', PROD: 'PROD' },
-  baseDir: process.cwd()
-});
-
-// Parse CLI arguments
-cli.parse(process.argv);
-```
-
-**Environment Setup:**
-```bash
-# .env
-# Database Configuration for DEV
-DEV_DB_HOST=localhost
-DEV_DB_NAME=dev_database
-DEV_DB_USERNAME=root
-DEV_DB_PASSWORD=password
-DEV_DB_MAIL=dev_mail_db
-
-# Database Configuration for PROD
-PROD_DB_HOST=prod-server.com
-PROD_DB_NAME=prod_database
-PROD_DB_USERNAME=prod_user
-PROD_DB_PASSWORD=prod_password
-PROD_DB_MAIL=prod_mail_db
-
-# Base directory for andb-core operations
-BASE_DIR=/path/to/your/project 
-```
-
-**Usage Examples:**
-```bash
-# Export tables from DEV
-node app.js export -t
-
-# Compare functions between DEV and PROD
-node app.js compare -f
-
-# Migrate new procedures to PROD
-node app.js migrate:new -p
-
-# Monitor database status
-node app.js monitor -s
-
-**Advanced Usage - Generate Scripts for package.json:**
-
-📖 **Documentation**: 
-- 🇻🇳 [GENERATOR.md](GENERATOR.md) (Vietnamese)
-- 🇺🇸 [GENERATOR_EN.md](GENERATOR_EN.md) (English)
+Auto-generate npm scripts for your workflow:
 
 ```bash
-# Generate scripts with default environments
-node andb generate
-
-# Generate with custom environments
-node andb generate -e "DEV,PROD" -c "DEV,PROD" -m "PROD"
-
-# Or use npm scripts
-npm run generate
-npm run helper
-```
-
-**Generated Scripts Examples:**
-```bash
-# Export commands
-npm run export:dev:fn          # Export functions from DEV
-npm run export:prod:sp          # Export procedures from PROD
-npm run export:dev              # Export all from DEV
-
-# Compare commands  
-npm run compare:prod:fn         # Compare functions in PROD
-npm run compare:prod:report     # Generate PROD report
-npm run compare:prod            # Full PROD comparison
-
-# Migrate commands
-npm run migrate:prod:new:fn     # Migrate new functions to PROD
-npm run migrate:prod:update     # Update all DDL in PROD
-npm run migrate:prod            # Full PROD migration
-
-# Deprecate commands
-npm run deprecate:prod:fn       # Deprecate functions in PROD
-npm run dep:prod:sp:ote         # Remove OTE procedures in PROD
-```
-
-**Helper Commands:**
-```bash
-npm run helper                  # Show usage help
-npm run helper --list          # List all available scripts
-npm run helper --config        # Show current configuration
-```
-
-### Integration Examples
-
-See [examples/](examples/) directory for complete integration examples with basic .env configuration.
-
-## Architecture
-
-![Database Migration Process](diagram/diagram.jpg)
-
-*Simple Export and Migration Process (DEV to PROD)*
-
-## 🚀 Script Generator
-
-Script generator tự động tạo các npm scripts trong `package.json` dựa trên cấu hình môi trường và loại DDL. Giúp đơn giản hóa việc quản lý database migration và comparison.
-
-### Tính năng chính
-
-- ✅ **Tự động sinh scripts** cho tất cả environments và DDL types
-- ✅ **Tùy chỉnh môi trường** qua environment variables
-- ✅ **Workflow scripts** cho export, compare, migrate, deprecate
-- ✅ **Shorthand commands** (dep thay cho deprecate)
-- ✅ **Utility scripts** cho testing, linting, helper
-
-### Cách sử dụng nhanh
-
-```bash
-# Generate với cấu hình mặc định
+# Generate with default config
 npm run generate
 
-# Tùy chỉnh môi trường
+# Custom environments
 ANDB_ENVIRONMENTS="DEV,STAGE,PROD" npm run generate
 
-# Xem hướng dẫn chi tiết
-# 📖 [GENERATOR.md](GENERATOR.md) (Vietnamese)
-# 📖 [GENERATOR_EN.md](GENERATOR_EN.md) (English)
+# Generated scripts
+npm run export:dev:fn      # Export functions from DEV
+npm run compare:prod:sp    # Compare procedures in PROD  
+npm run migrate:stage:new  # Migrate new objects to STAGE
 ```
 
-## Features
+📖 **Documentation**: [GENERATOR.md](docs/GENERATOR.md) | [GENERATOR_EN.md](docs/GENERATOR_EN.md)
 
-- Database object export (tables, procedures, functions, triggers)
-- Database comparison between 2 environments each time
-- Migration tools for new/updated/removed objects
-- Database monitoring
-- Multi-environment support, for example (DEV/PROD) or (DEV/STAGE/PROD),...
-- Basic .env configuration support
-- **Script Generator**: Tự động sinh npm scripts cho package.json
+## 📁 Project Structure
 
-## 📁 Output Folder Structure
+```
+andb-core/
+├── core/           # Core functionality
+├── examples/       # Integration examples
+├── docs/          # Documentation
+├── scripts/       # CLI scripts
+└── test/          # Test files
+```
 
-### 🗄️ Database Schema Structure
+## 🔧 Environment Setup
+
+```bash
+# .env
+DEV_DB_HOST=localhost
+DEV_DB_NAME=dev_database
+DEV_DB_USER=root
+DEV_DB_PASS=password
+
+PROD_DB_HOST=prod-server.com
+PROD_DB_NAME=prod_database
+PROD_DB_USER=prod_user
+PROD_DB_PASS=prod_password
+```
+
+## 📊 Output Structure
+
 ```
 📦 <environment>
 ├── 📂 <schema>
 │   ├── 📄 current-ddl
 │   ├── ⚙️ functions
-│   └── 📊 tables
-└── 📂 preflow_40
-    ├── 💾 backup
-    │   ├── 📅 1_12_2024
-    │   │   ├── 🔧 procedures
-    │   │   ├── ⚙️ functions
-    │   │   └── 🔄 triggers
-    │   ├── ⚙️ functions
-    │   ├── 🔧 procedures
-    │   ├── 📊 tables
-    │   └── 🔄 triggers
-    ├── 📄 current-ddl
-    ├── ⚙️ functions
-    ├── 🔧 procedures
-    ├── 📊 tables
-    └── 🔄 triggers
+│   ├── 🔧 procedures
+│   ├── 📊 tables
+│   └── 🔄 triggers
+└── 📂 backup/
+    └── 📅 <date>/
 ```
 
-### 🚀 Migration Map Structure
-```
-📦 map-migrate
-└── 📂 <source env>-to-<destination env>  ← <DEV>-to-<PROD>
-    └── 📂 <schema>
-        ├── ⚙️ functions
-        ├── 🔧 procedures
-        ├── 📊 tables
-        │   └── 🔄 alters
-        │       ├── 📋 columns
-        │       ├── 🔍 indexes
-        │       └── 🗑️ rmv-columns
-        └── 🔄 triggers
-```
+## 🤝 Contributing
 
-## License
-MIT
+1. Fork the repository
+2. Create feature branch
+3. Commit changes
+4. Push to branch
+5. Create Pull Request
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file
 
 ---
 
-# @anph/core (Tiếng Việt)
+# andb-core (Tiếng Việt)
 
 Công cụ migration và so sánh database bởi ph4n4n
 
-## Cài đặt
+## Bắt đầu nhanh
 
 ```bash
-npm install @anph/core
-```
+# Cài đặt
+npm install andb-core
 
-## Sử dụng
-
-### CLI
-
-```bash
-# Export database objects
+# Sử dụng cơ bản
 andb export -t tables
-andb export -p procedures
-andb export -f functions
-andb export -tr triggers
-
-# Compare database objects
-andb compare -t tables
-andb compare -p procedures
 andb compare -f functions
-andb compare -tr triggers
-
-# Migrate new objects
-andb migrate:new -t tables
 andb migrate:new -p procedures
-
-# Update existing objects
-andb migrate:update -t tables
-andb migrate:update -p procedures
-
-# Deprecate objects
-andb deprecate -p procedures
-andb deprecate -f functions
-
-# Monitor database
-andb monitor -p processlist
-andb monitor -s status
 ```
 
-### Programmatic
+## 🚀 Tính năng
 
-```javascript
-// 1. import
-const andb = require('@anph/core');
+- ✅ **Export Database** - Tables, Procedures, Functions, Triggers
+- ✅ **So sánh môi trường** - Compare giữa DEV/STAGE/PROD
+- ✅ **Công cụ Migration** - New/Update/Remove objects
+- ✅ **Script Generator** - Tự động sinh npm scripts
+- ✅ **Đa môi trường** - Hỗ trợ workflow DEV/STAGE/PROD
 
-// 2. Use services
-const { service, utils, commander, interfaces } = andb;
+## 📚 Tài liệu
 
-// 3. implement interface
-class MyDatabaseService extends interfaces.IDatabaseService {
-  getDBDestination(env, mail = false) {
-    const configs = {
-      DEV: {
-        host: process.env.DEV_DB_HOST,
-        database: process.env.DEV_DB_NAME,
-        user: process.env.DEV_DB_USER,
-        password: process.env.DEV_DB_PASS
-      },
-      PROD: {
-        host: process.env.PROD_DB_HOST,
-        database: process.env.PROD_DB_NAME,
-        user: process.env.PROD_DB_USER,
-        password: process.env.PROD_DB_PASS
-      }
-    };
-    return configs[env.toUpperCase()];
-  }
+### 🇺🇸 English
+- 📖 [CLI Usage](docs/CLI_EN.md) - Complete CLI commands
+- 📖 [Script Generator](docs/GENERATOR_EN.md) - Auto-generate npm scripts
+- 📖 [Integration Guide](docs/INTEGRATION_EN.md) - Programmatic usage
+- 📖 [Examples](examples/) - Ready-to-use examples
 
-  getSourceEnv(envName) {
-    return envName === 'PROD' ? 'DEV' : 'DEV';
-  }
+### 🇻🇳 Tiếng Việt  
+- 📖 [Hướng dẫn CLI](docs/CLI.md) - Lệnh CLI đầy đủ
+- 📖 [Script Generator](docs/GENERATOR.md) - Tự động sinh npm scripts
+- 📖 [Hướng dẫn tích hợp](docs/INTEGRATION.md) - Sử dụng programmatic
+- 📖 [Ví dụ](examples/) - Ví dụ sẵn sàng sử dụng
 
-  getDestEnv(env) {
-    return env === 'DEV' ? 'PROD' : 'PROD';
-  }
+## 🛠️ Script Generator
 
-  getDBName(env, isDbMail = false) {
-    return process.env[`${env}_DB_NAME`];
-  }
-
-  replaceWithEnv(ddl, destEnv) {
-    return destEnv === 'PROD' 
-      ? ddl.replace(/@dev\.com/g, '@prod.com')
-      : ddl;
-  }
-}
-
-// 4. enjoy it
-const dbService = new MyDatabaseService();
-
-// Build CLI with your implementation
-const cli = commander.build({
-  getDBDestination: dbService.getDBDestination.bind(dbService),
-  getSourceEnv: dbService.getSourceEnv.bind(dbService),
-  getDestEnv: dbService.getDestEnv.bind(dbService),
-  getDBName: dbService.getDBName.bind(dbService),
-  replaceWithEnv: dbService.replaceWithEnv.bind(dbService),
-  ENVIRONMENTS: { DEV: 'DEV', PROD: 'PROD' },
-  baseDir: process.cwd()
-});
-
-// Parse CLI arguments
-cli.parse(process.argv);
-```
-
-**Environment Setup:**
-```bash
-# .env
-# Database Configuration for DEV
-DEV_DB_HOST=localhost
-DEV_DB_NAME=dev_database
-DEV_DB_USERNAME=root
-DEV_DB_PASSWORD=password
-DEV_DB_MAIL=dev_mail_db
-
-# Database Configuration for PROD
-PROD_DB_HOST=prod-server.com
-PROD_DB_NAME=prod_database
-PROD_DB_USERNAME=prod_user
-PROD_DB_PASSWORD=prod_password
-PROD_DB_MAIL=prod_mail_db
-
-# Base directory for andb-core operations
-BASE_DIR=/path/to/your/project 
-```
-
-**Usage Examples:**
-```bash
-# Export tables from DEV
-node app.js export -t
-
-# Compare functions between DEV and PROD
-node app.js compare -f
-
-# Migrate new procedures to PROD
-node app.js migrate:new -p
-
-# Monitor database status
-node app.js monitor -s
-
-**Advanced Usage - Generate Scripts for package.json:**
-
-📖 **Tài liệu**: 
-- 🇻🇳 [GENERATOR.md](GENERATOR.md) (Tiếng Việt)
-- 🇺🇸 [GENERATOR_EN.md](GENERATOR_EN.md) (English)
-
-```bash
-# Generate scripts with default environments
-node andb generate
-
-# Generate with custom environments
-node andb generate -e "DEV,PROD" -c "DEV,PROD" -m "PROD"
-
-# Or use npm scripts
-npm run generate
-npm run helper
-```
-
-**Generated Scripts Examples:**
-```bash
-# Export commands
-npm run export:dev:fn          # Export functions from DEV
-npm run export:prod:sp          # Export procedures from PROD
-npm run export:dev              # Export all from DEV
-
-# Compare commands  
-npm run compare:prod:fn         # Compare functions in PROD
-npm run compare:prod:report     # Generate PROD report
-npm run compare:prod            # Full PROD comparison
-
-# Migrate commands
-npm run migrate:prod:new:fn     # Migrate new functions to PROD
-npm run migrate:prod:update     # Update all DDL in PROD
-npm run migrate:prod            # Full PROD migration
-
-# Deprecate commands
-npm run deprecate:prod:fn       # Deprecate functions in PROD
-npm run dep:prod:sp:ote         # Remove OTE procedures in PROD
-```
-
-**Helper Commands:**
-```bash
-npm run helper                  # Show usage help
-npm run helper --list          # List all available scripts
-npm run helper --config        # Show current configuration
-```
-
-### Integration Examples
-
-See [examples/](examples/) directory for complete integration examples with basic .env configuration.
-
-## Architecture
-
-![Database Migration Process](diagram/diagram.jpg)
-
-*Simple Export and Migration Process (DEV to PROD)*
-
-## 🚀 Script Generator
-
-Script generator tự động tạo các npm scripts trong `package.json` dựa trên cấu hình môi trường và loại DDL. Giúp đơn giản hóa việc quản lý database migration và comparison.
-
-### Tính năng chính
-
-- ✅ **Tự động sinh scripts** cho tất cả environments và DDL types
-- ✅ **Tùy chỉnh môi trường** qua environment variables
-- ✅ **Workflow scripts** cho export, compare, migrate, deprecate
-- ✅ **Shorthand commands** (dep thay cho deprecate)
-- ✅ **Utility scripts** cho testing, linting, helper
-
-### Cách sử dụng nhanh
+Tự động sinh npm scripts cho workflow:
 
 ```bash
 # Generate với cấu hình mặc định
@@ -510,61 +163,62 @@ npm run generate
 # Tùy chỉnh môi trường
 ANDB_ENVIRONMENTS="DEV,STAGE,PROD" npm run generate
 
-# Xem hướng dẫn chi tiết
-# 📖 [GENERATOR.md](GENERATOR.md) (Vietnamese)
-# 📖 [GENERATOR_EN.md](GENERATOR_EN.md) (English)
+# Scripts được tạo
+npm run export:dev:fn      # Export functions từ DEV
+npm run compare:prod:sp    # Compare procedures trong PROD
+npm run migrate:stage:new  # Migrate new objects lên STAGE
 ```
 
-## Features
+📖 **Tài liệu**: [GENERATOR.md](docs/GENERATOR.md) | [GENERATOR_EN.md](docs/GENERATOR_EN.md)
 
-- Database object export (tables, procedures, functions, triggers)
-- Database comparison between 2 environments each time
-- Migration tools for new/updated/removed objects
-- Database monitoring
-- Multi-environment support, for example (DEV/PROD) or (DEV/STAGE/PROD),...
-- Basic .env configuration support
-- **Script Generator**: Tự động sinh npm scripts cho package.json
+## 📁 Cấu trúc project
 
-## 📁 Output Folder Structure
+```
+andb-core/
+├── core/           # Chức năng core
+├── examples/       # Ví dụ tích hợp
+├── docs/          # Tài liệu
+├── scripts/       # CLI scripts
+└── test/          # Test files
+```
 
-### 🗄️ Database Schema Structure
+## 🔧 Cấu hình môi trường
+
+```bash
+# .env
+DEV_DB_HOST=localhost
+DEV_DB_NAME=dev_database
+DEV_DB_USER=root
+DEV_DB_PASS=password
+
+PROD_DB_HOST=prod-server.com
+PROD_DB_NAME=prod_database
+PROD_DB_USER=prod_user
+PROD_DB_PASS=prod_password
+```
+
+## 📊 Cấu trúc output
+
 ```
 📦 <environment>
 ├── 📂 <schema>
 │   ├── 📄 current-ddl
 │   ├── ⚙️ functions
-│   └── 📊 tables
-└── 📂 preflow_40
-    ├── 💾 backup
-    │   ├── 📅 1_12_2024
-    │   │   ├── 🔧 procedures
-    │   │   ├── ⚙️ functions
-    │   │   └── 🔄 triggers
-    │   ├── ⚙️ functions
-    │   ├── 🔧 procedures
-    │   ├── 📊 tables
-    │   └── 🔄 triggers
-    ├── 📄 current-ddl
-    ├── ⚙️ functions
-    ├── 🔧 procedures
-    ├── 📊 tables
-    └── 🔄 triggers
+│   ├── 🔧 procedures
+│   ├── 📊 tables
+│   └── 🔄 triggers
+└── 📂 backup/
+    └── 📅 <date>/
 ```
 
-### 🚀 Migration Map Structure
-```
-📦 map-migrate
-└── 📂 <source env>-to-<destination env>  ← <DEV>-to-<PROD>
-    └── 📂 <schema>
-        ├── ⚙️ functions
-        ├── 🔧 procedures
-        ├── 📊 tables
-        │   └── 🔄 alters
-        │       ├── 📋 columns
-        │       ├── 🔍 indexes
-        │       └── 🗑️ rmv-columns
-        └── 🔄 triggers
-```
+## 🤝 Đóng góp
 
-## License
-MIT 
+1. Fork repository
+2. Tạo feature branch
+3. Commit changes
+4. Push to branch
+5. Tạo Pull Request
+
+## 📄 License
+
+MIT License - xem file [LICENSE](LICENSE) 
