@@ -1,11 +1,12 @@
 {
   "name": "andb-core",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "Database migration and comparison tool by ph4n4n",
   "main": "index.js",
   "files": [
     "index.js",
-    "core/"
+    "core/",
+    "docs/"
   ],
   "scripts": {
     "test": "jest",
@@ -28,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ph4n4n/@anph/core.git"
+    "url": "git+https://github.com/ph4n4n/andb-core.git"
   },
   "keywords": [
     "database",
@@ -37,7 +38,7 @@
     "mysql",
     "ddl",
     "andb",
-    "@anph/core",
+    "andb-core",
     "andb-cli",
     "ph4n4n",
     "mysql"
@@ -45,7 +46,7 @@
   "author": "ph4n4n",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ph4n4n/@anph/core/issues"
+    "url": "https://github.com/ph4n4n/andb-core/issues"
   },
-  "homepage": "https://github.com/ph4n4n/@anph/core#readme"
+  "homepage": "https://github.com/ph4n4n/andb-core#readme"
 }
