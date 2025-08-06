@@ -1,18 +1,11 @@
 {
   "name": "andb-core",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Database migration and comparison tool by ph4n4n",
   "main": "index.js",
   "files": [
     "index.js",
-    "cli.js",
-    "service/",
-    "utils/",
-    "configs/",
-    "interfaces/",
-    "scripts/",
-    "examples/",
-    "diagram/"
+    "core/"
   ],
   "scripts": {
     "test": "jest",
