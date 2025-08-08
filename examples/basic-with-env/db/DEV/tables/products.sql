@@ -1,0 +1,26 @@
+-- Products table DDL
+CREATE TABLE products (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(200) NOT NULL,
+  description TEXT,
+  sku VARCHAR(50) UNIQUE,
+  price DECIMAL(10,2) NOT NULL,
+  cost_price DECIMAL(10,2),
+  stock_quantity INT DEFAULT 0,
+  category_id INT,
+  brand VARCHAR(100),
+  weight DECIMAL(8,2),
+  dimensions JSON,
+  images JSON,
+  tags JSON,
+  status ENUM('active', 'inactive', 'draft', 'archived') DEFAULT 'active',
+  is_featured BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_by INT,
+  INDEX idx_sku (sku),
+  INDEX idx_category (category_id),
+  INDEX idx_status (status),
+  INDEX idx_price (price),
+  INDEX idx_created_at (created_at)
+); 

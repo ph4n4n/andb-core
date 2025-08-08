@@ -1,0 +1,17 @@
+{
+  "name": "basic-with-env",
+  "version": "1.0.0",
+  "description": "basic-with-env",
+  "main": "integration.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "andb-core": "^1.0.5",
+    "dotenv": "^17.2.1"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "andb-core",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Database migration and comparison tool by ph4n4n",
   "main": "index.js",
   "files": [

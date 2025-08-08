@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { cli } = require('andb-core');
+const { commander } = require('andb-core');
 
 const {
   getDBDestination,
@@ -11,7 +11,7 @@ const {
   ENVIRONMENTS
 } = require('./configs/db');
 
-const andbCli = cli.build({
+const andbCli = commander.build({
   getDBDestination,
   getSourceEnv,
   getDestEnv,

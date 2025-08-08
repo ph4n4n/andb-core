@@ -92,7 +92,11 @@ PROD_DB_PASS=prod_password
 ```
 📦 <environment>
 ├── 📂 <schema>
-│   ├── 📄 current-ddl
+│   ├── 📂 current-ddl
+        ├── functions.list
+        ├── procedures.list
+        ├── tables.list
+        └── triggers.list
 │   ├── ⚙️ functions
 │   ├── 🔧 procedures
 │   ├── 📊 tables

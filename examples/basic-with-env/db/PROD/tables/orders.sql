@@ -1,0 +1,28 @@
+-- Orders table DDL for PROD
+CREATE TABLE orders (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  order_number VARCHAR(50) UNIQUE NOT NULL,
+  user_id INT NOT NULL,
+  total_amount DECIMAL(10,2) NOT NULL,
+  tax_amount DECIMAL(10,2) DEFAULT 0.00,
+  shipping_amount DECIMAL(10,2) DEFAULT 0.00,
+  discount_amount DECIMAL(10,2) DEFAULT 0.00,
+  status ENUM('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded') DEFAULT 'pending',
+  payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',
+  payment_method VARCHAR(50),
+  shipping_address JSON,
+  billing_address JSON,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  shipped_at TIMESTAMP NULL,
+  delivered_at TIMESTAMP NULL,
+  tracking_number VARCHAR(100),
+  carrier VARCHAR(50),
+  INDEX idx_order_number (order_number),
+  INDEX idx_user_id (user_id),
+  INDEX idx_status (status),
+  INDEX idx_created_at (created_at),
+  INDEX idx_payment_status (payment_status),
+  INDEX idx_tracking_number (tracking_number)
+); 

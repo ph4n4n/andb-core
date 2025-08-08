@@ -1,0 +1,26 @@
+-- Users table DDL for PROD
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  full_name VARCHAR(100),
+  phone VARCHAR(20),
+  status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+  role ENUM('admin', 'user', 'moderator', 'super_admin') DEFAULT 'user',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_login TIMESTAMP NULL,
+  avatar_url VARCHAR(255),
+  is_verified BOOLEAN DEFAULT FALSE,
+  verification_token VARCHAR(100),
+  reset_token VARCHAR(100),
+  reset_token_expires TIMESTAMP NULL,
+  preferences JSON,
+  two_factor_enabled BOOLEAN DEFAULT FALSE,
+  INDEX idx_email (email),
+  INDEX idx_username (username),
+  INDEX idx_status (status),
+  INDEX idx_created_at (created_at),
+  INDEX idx_role (role)
+); 
