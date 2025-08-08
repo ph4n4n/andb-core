@@ -28,13 +28,13 @@ andb migrate:new -p procedures
 - 📖 [CLI Usage](docs/CLI_EN.md) - Complete CLI commands
 - 📖 [Script Generator](docs/GENERATOR_EN.md) - Auto-generate npm scripts
 - 📖 [Integration Guide](docs/INTEGRATION_EN.md) - Programmatic usage
-- 📖 [Examples](examples/) - Ready-to-use examples
+- 📖 [Examples](examples/) - Ready-to-use examples, please check [QUICKSTART](example/basic-with-env/QUICKSTART.md) guild
 
 ### 🇻🇳 Tiếng Việt  
 - 📖 [Hướng dẫn CLI](docs/CLI.md) - Lệnh CLI đầy đủ
 - 📖 [Script Generator](docs/GENERATOR.md) - Tự động sinh npm scripts
 - 📖 [Hướng dẫn tích hợp](docs/INTEGRATION.md) - Sử dụng programmatic
-- 📖 [Ví dụ](examples/) - Ví dụ sẵn sàng sử dụng
+- 📖 [Ví dụ](examples/) - Ví dụ sẵn sàng sử dụng, xem [QUICKSTART](example/basic-with-env/QUICKSTART.md) để thấy rõ hơn
 
 ## 🛠️ Script Generator
 
