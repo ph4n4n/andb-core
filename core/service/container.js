@@ -9,7 +9,11 @@
  * Copyright (c) 2024 ph4n4n
  * https://github.com/ph4n4n/@anph/core
  */
-
+const [EXPORTER, COMPARATOR, MIGRATOR, MONITOR,
+  REPORT_HELPER, FILE_MANAGER, DB_UTIL_FN, BASE_DIR,
+] = [
+    'exporter', 'comparator', 'migrator', 'monitor', 'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir'
+  ];
 const ExporterService = require('./exporter');
 const ComparatorService = require('./comparator');
 const MigratorService = require('./migrator');
@@ -21,12 +25,108 @@ module.exports = class Container {
     this.config = config;
     this.services = new Map();
     this.configs = new Map();
-    this.initialize();
+    this.build();
   }
 
-  initialize() {
-    // Register configurations from injected config
-    this.configs.set('dbUtilFn', {
+  build() {
+    this
+      .registerConfigurations()
+      .addBaseDirectory()
+      .createFileManager()
+      .registerReportHelper()
+      .registerExporter()
+      .registerComparator()
+      .registerMigrator()
+      .registerMonitor();
+  }
+
+  registerMonitor() {
+    this.services.set(MONITOR, (container) => {
+      const dbUtilFn = container.get(DB_UTIL_FN);
+      const fileManager = container.get(FILE_MANAGER);
+      
+      return (field) => {
+        const monitorService = new MonitorService({ ...dbUtilFn, fileManager });
+        return monitorService.monitor(field);
+      };
+    });
+    return this;
+  }
+
+  registerMigrator() {
+    this.services.set(MIGRATOR, (container) => {
+      const dbUtilFn = container.get(DB_UTIL_FN);
+      const fileManager = container.get(FILE_MANAGER);
+      
+      return (ddl, status) => {
+        const migratorService = new MigratorService({ ...dbUtilFn, fileManager });
+        return migratorService.migrate(ddl, status);
+      };
+    });
+    return this;
+  }
+
+  registerComparator() {
+    this.services.set(COMPARATOR, (container) => {
+      const dbUtilFn = container.get(DB_UTIL_FN);
+      const reportHelper = container.get(REPORT_HELPER);
+      const fileManager = container.get(FILE_MANAGER);
+      const comparatorService = new ComparatorService({
+        ...dbUtilFn,
+        appendReport: reportHelper.appendReport.bind(reportHelper),
+        report2console: reportHelper.report2console.bind(reportHelper),
+        report2html: reportHelper.report2html.bind(reportHelper),
+        vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
+        fileManager
+      });
+      return (ddl) => comparatorService.compare(ddl);
+    });
+    return this;
+  }
+
+  registerExporter() {
+    this.services.set(EXPORTER, (container) => {
+      const dbUtilFn = container.get(DB_UTIL_FN);
+      const reportHelper = container.get(REPORT_HELPER);
+      const fileManager = container.get(FILE_MANAGER);
+      const exporterService = new ExporterService({
+        ...dbUtilFn,
+        appendReport: reportHelper.appendReport.bind(reportHelper),
+        report2console: reportHelper.report2console.bind(reportHelper),
+        report2html: reportHelper.report2html.bind(reportHelper),
+        vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
+        fileManager
+      });
+      return (ddl) => exporterService.export(ddl);
+    });
+    return this;
+  }
+
+  registerReportHelper() {
+    this.services.set(REPORT_HELPER, (container) => {
+      const dbUtilFn = container.get(DB_UTIL_FN);
+      const fileManager = container.get(FILE_MANAGER);
+      return createReportHelper({ ...dbUtilFn, fileManager });
+    });
+    return this;
+  }
+
+  createFileManager() {
+    this.services.set(FILE_MANAGER, (container) => {
+      const baseDir = container.get(BASE_DIR);
+      const FileManager = require('../utils/file.helper');
+      return FileManager.getInstance(baseDir);
+    });
+    return this;
+  }
+
+  addBaseDirectory() {
+    this.configs.set(BASE_DIR, this.config.baseDir || process.cwd());
+    return this;
+  }
+
+  registerConfigurations() {
+    this.configs.set(DB_UTIL_FN, {
       getDBDestination: this.config.getDBDestination,
       getSourceEnv: this.config.getSourceEnv,
       getDestEnv: this.config.getDestEnv,
@@ -34,79 +134,15 @@ module.exports = class Container {
       replaceWithEnv: this.config.replaceWithEnv,
       ENVIRONMENTS: this.config.ENVIRONMENTS
     });
-
-    // Add base directory to configs
-    this.configs.set('baseDir', this.config.baseDir || process.cwd());
-
-    // Create fileManager first (shared instance)
-    this.services.set('fileManager', (container) => {
-      const baseDir = container.get('baseDir');
-      const FileManager = require('../utils/file.helper');
-      return FileManager.getInstance(baseDir);
-    });
-
-    // ReportHelper (factory, not need DI class) - create first to avoid circular dependency
-    this.services.set('reportHelper', (container) => {
-      const dbUtilFn = container.get('dbUtilFn');
-      const fileManager = container.get('fileManager');
-
-      return createReportHelper({ ...dbUtilFn, fileManager });
-    });
-
-    // Exporter: class-based DI
-    this.services.set('exporter', (container) => {
-      const dbUtilFn = container.get('dbUtilFn');
-      const reportHelper = container.get('reportHelper');
-      const fileManager = container.get('fileManager');
-      const exporterService = new ExporterService({ 
-        ...dbUtilFn, 
-        appendReport: reportHelper.appendReport.bind(reportHelper),
-        report2console: reportHelper.report2console.bind(reportHelper),
-        report2html: reportHelper.report2html.bind(reportHelper),
-        vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
-        fileManager 
-      });
-      return (ddl) => exporterService.export(ddl);
-    });
-
-    // Comparator: class-based DI
-    this.services.set('comparator', (container) => {
-      const dbUtilFn = container.get('dbUtilFn');
-      const reportHelper = container.get('reportHelper');
-      const fileManager = container.get('fileManager');
-      const comparatorService = new ComparatorService({ 
-        ...dbUtilFn, 
-        appendReport: reportHelper.appendReport.bind(reportHelper),
-        report2console: reportHelper.report2console.bind(reportHelper),
-        report2html: reportHelper.report2html.bind(reportHelper),
-        vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
-        fileManager 
-      });
-      return (ddl) => comparatorService.compare(ddl);
-    });
-
-    // Migrator: class-based DI
-    this.services.set('migrator', (container) => {
-      const dbUtilFn = container.get('dbUtilFn');
-      const fileManager = container.get('fileManager');
-      const migratorService = new MigratorService({ ...dbUtilFn, fileManager });
-      return (ddl, status) => migratorService.migrate(ddl, status);
-    });
-
-    // Monitor: class-based DI
-    this.services.set('monitor', (container) => {
-      const dbUtilFn = container.get('dbUtilFn');
-      const fileManager = container.get('fileManager');
-      const monitorService = new MonitorService({ ...dbUtilFn, fileManager });
-      return (field) => monitorService.monitor(field);
-    });
+    return this;
   }
 
   get(name) {
+    // Get config if exist
     if (this.configs.has(name)) {
       return this.configs.get(name);
     }
-
+    // Get service if exist
     if (this.services.has(name)) {
       return this.services.get(name)?.(this);
     }
@@ -117,12 +153,11 @@ module.exports = class Container {
   // Helper method to get all services at once
   getServices() {
     return {
-      exporter: this.get('exporter'),
-      comparator: this.get('comparator'),
-      migrator: this.get('migrator'),
-      monitor: this.get('monitor'),
-      reportHelper: this.get('reportHelper')
+      exporter: this.get(EXPORTER),
+      comparator: this.get(COMPARATOR),
+      migrator: this.get(MIGRATOR),
+      monitor: this.get(MONITOR),
+      reportHelper: this.get(REPORT_HELPER)
     };
   }
 }
- 

@@ -114,12 +114,11 @@ module.exports = class MigratorService {
     }
   }
   // DON'T migrate OTE_,test normally
-  isNotMigrateCondition(functionName) {
+  isNotMigrateCondition(functionName, notAllowOTE = true) {
     return functionName
       .toLowerCase()
       .indexOf('test') > -1
-      || functionName
-        .indexOf('OTE_') > -1;
+      || (notAllowOTE && functionName.indexOf('OTE_') > -1);
   }
 
   /**
