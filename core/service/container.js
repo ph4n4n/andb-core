@@ -33,18 +33,18 @@ module.exports = class Container {
       .registerConfigurations()
       .addBaseDirectory()
       .createFileManager()
-      .registerReportHelper()
-      .registerExporter()
-      .registerComparator()
-      .registerMigrator()
-      .registerMonitor();
+      .buildReportHelper()
+      .buildExporter()
+      .buildComparator()
+      .buildMigrator()
+      .buildMonitor();
   }
 
-  registerMonitor() {
+  buildMonitor() {
     this.services.set(MONITOR, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
-      
+
       return (field) => {
         const monitorService = new MonitorService({ ...dbUtilFn, fileManager });
         return monitorService.monitor(field);
@@ -53,11 +53,11 @@ module.exports = class Container {
     return this;
   }
 
-  registerMigrator() {
+  buildMigrator() {
     this.services.set(MIGRATOR, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
-      
+
       return (ddl, status) => {
         const migratorService = new MigratorService({ ...dbUtilFn, fileManager });
         return migratorService.migrate(ddl, status);
@@ -66,7 +66,7 @@ module.exports = class Container {
     return this;
   }
 
-  registerComparator() {
+  buildComparator() {
     this.services.set(COMPARATOR, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const reportHelper = container.get(REPORT_HELPER);
@@ -84,7 +84,7 @@ module.exports = class Container {
     return this;
   }
 
-  registerExporter() {
+  buildExporter() {
     this.services.set(EXPORTER, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const reportHelper = container.get(REPORT_HELPER);
@@ -102,7 +102,7 @@ module.exports = class Container {
     return this;
   }
 
-  registerReportHelper() {
+  buildReportHelper() {
     this.services.set(REPORT_HELPER, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
