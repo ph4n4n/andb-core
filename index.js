@@ -11,10 +11,23 @@
  */
 
 const utils = require('./core/utils')
-const commander = require('./core/cli')
 const configs = require('./core/configs')
 const interfaces = require('./core/interfaces')
 
+// Services
+const ExporterService = require('./core/service/exporter')
+const ComparatorService = require('./core/service/comparator')
+const MigratorService = require('./core/service/migrator')
+const MonitorService = require('./core/service/monitor')
+const Container = require('./core/service/container')
+
 module.exports = {
-  utils, commander, configs, interfaces
+  utils,
+  configs,
+  interfaces,
+  ExporterService,
+  ComparatorService,
+  MigratorService,
+  MonitorService,
+  Container
 }

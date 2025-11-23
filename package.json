@@ -1,6 +1,9 @@
 {
-  "name": "andb-core",
-  "version": "1.0.5",
+  "name": "@andb/core",
+  "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Database migration and comparison tool by ph4n4n",
   "main": "index.js",
   "files": [
@@ -10,14 +13,11 @@
   ],
   "scripts": {
     "test": "jest",
-    "prepublishOnly": "npm test",
-    "andb": "node scripts/andb.js",
-    "generate": "node scripts/andb.js generate",
-    "helper": "node scripts/andb.js helper"
+    "prepublishOnly": "npm test"
   },
   "dependencies": {
     "andb-logger": "^1.0.3",
-    "commander": "^11.1.0",
+    "better-sqlite3": "^12.4.6",
     "diff": "^5.1.0",
     "mysql2": "^3.14.3"
   },

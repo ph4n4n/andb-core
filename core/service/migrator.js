@@ -41,6 +41,50 @@ module.exports = class MigratorService {
     for (const key in dependencies) {
       this[key] = dependencies[key];
     }
+    
+    // Storage strategy (File/SQLite/Hybrid)
+    this.storage = dependencies.storage || null;
+  }
+
+  /**
+   * Read DDL content from storage or fallback to file
+   * @param {string} env - Environment
+   * @param {string} type - DDL type (TABLES, PROCEDURES, etc)
+   * @param {string} name - DDL name
+   * @returns {Promise<string>} DDL content
+   */
+  async readDDL(env, type, name) {
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      return await this.storage.getDDL(env, this.getDBName(env), type, name);
+    }
+    
+    // Fallback: FileManager
+    const folder = `db/${env}/${this.getDBName(env)}/${type}`;
+    return this.fileManager.readFromFile(folder, `${name}.sql`);
+  }
+
+  /**
+   * Read comparison list from storage or fallback to file
+   * @param {string} srcEnv - Source environment
+   * @param {string} destEnv - Destination environment
+   * @param {string} type - DDL type
+   * @param {string} listFile - List file name (e.g., 'new.list', 'updated.list')
+   * @returns {Promise<Array<string>>} Array of DDL names
+   */
+  async readComparisonList(srcEnv, destEnv, type, listFile) {
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      const comparisons = await this.storage.getComparisons(srcEnv, destEnv, this.getDBName(srcEnv), type);
+      const status = listFile.replace('.list', ''); // 'new.list' -> 'new'
+      return comparisons
+        .filter(c => c.status === status)
+        .map(c => c.name);
+    }
+    
+    // Fallback: FileManager
+    const folder = `map-migrate/${srcEnv}-to-${destEnv}/${this.getDBName(srcEnv)}/${type}`;
+    return this.fileManager.readFromFile(folder, listFile, 1);
   }
 
   /**
@@ -58,9 +102,8 @@ module.exports = class MigratorService {
     const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${FUNCTIONS}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
     try {
-      const fnFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
-      const fnList = `${fromList}.list`;
-      const functionNames = this.fileManager.readFromFile(fnFolder, fnList, 1)
+      // Read function list from storage or file
+      const functionNames = await this.readComparisonList(srcEnv, dbConfig.envName, FUNCTIONS, `${fromList}.list`);
 
       // Check if there are functions to migrate
       if (!functionNames.length) {
@@ -75,7 +118,10 @@ module.exports = class MigratorService {
         for (const functionName of functionNames) {
           const fileName = `${functionName}.sql`;
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
-          const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
+          
+          // Read function DDL from storage or file
+          const importQuery = await this.readDDL(srcEnv, FUNCTIONS, functionName);
+          
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
@@ -93,8 +139,12 @@ module.exports = class MigratorService {
             this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
           }
         }
-        // clean after migrated done
-        this.fileManager.saveToFile(fnFolder, fnList, '');
+        // clean after migrated done (only for file-based storage)
+        if (!this.storage) {
+          const fnFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
+          const fnList = `${fromList}.list`;
+          this.fileManager.saveToFile(fnFolder, fnList, '');
+        }
         if (+process.env.EXPERIMENTAL < 1) {
           // Commit the transaction if all queries are successful
           await util.promisify(destConnection.commit).call(destConnection);
@@ -436,11 +486,11 @@ module.exports = class MigratorService {
           const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
 
           if (+process.env.EXPERIMENTAL === 1) {
-            logger.warn('Experimental Run::', { importQuery });
+            if (global.logger) global.logger.warn('Experimental Run::', { importQuery });
           } else {
-            console.log(importQuery);
+            if (global.logger) global.logger.dev('Executing query:', importQuery);
             await util.promisify(destConnection.query).call(destConnection, importQuery);
-            logger.info('Created...', tableName, '\n');
+            if (global.logger) global.logger.info('Created...', tableName, '\n');
           }
           tablesMigrated++;
         }
@@ -626,8 +676,8 @@ module.exports = class MigratorService {
       });
       destConnection.connect(err => {
         if (err) {
-          logger.error('Error connecting to the database: ', err);
-          process.exit(1);
+          if (global.logger) global.logger.error('Error connecting to the database: ', err);
+          throw new Error(`Database connection failed: ${err.message}`);
         }
         (async () => {
           let rs = 0;

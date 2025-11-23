@@ -31,6 +31,16 @@ module.exports = class ExporterService {
 
   // Function to prepare the DDL folder
   makeDDLFolderReady(dbPath, DDL) {
+    // NEW: Skip folder creation if using Storage Strategy
+    if (this.storage) {
+      return null; // Storage handles everything
+    }
+
+    // NEW: Skip folder creation if file output is disabled
+    if (this.config && this.config.enableFileOutput === false) {
+      return null;
+    }
+
     const ddLFolderPath = `${dbPath}/${DDL}`;
     // 1. get folder ready
     this.fileManager.makeSureFolderExisted(ddLFolderPath);
@@ -79,7 +89,7 @@ module.exports = class ExporterService {
 
             // Format trigger definition
             const formattedStatement = this.convertKeywordsToUppercase(createStatement)
-              .replace(/\sDEFINER=`.+`@`(%|.+%)`\s/, " ")
+              .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ")
               .replace(/\sCOLLATE\s+\w+\s/, " ")
               .replace(/\sCHARSET\s+\w+\s/, " ");
 
@@ -122,6 +132,10 @@ module.exports = class ExporterService {
           await self.appendReport(dbConfig.envName, {
             functions_total: functionResults.length,
           });
+
+          // NEW: Collect exported data
+          const exportedData = [];
+
           // Export functions to separate files
           for (const row of functionResults) {
             const fnName = row.Name;
@@ -130,15 +144,39 @@ module.exports = class ExporterService {
               .promisify(connection.query)
               .call(connection, query);
             const createStatement = result[0]["Create Function"];
+            const cleanStatement = self.convertKeywordsToUppercase(createStatement);
+
+            // Write to file (keep for CLI/git)
             self.appendDDL(
               dbConfig.envName,
               ddlFolderPath,
               FUNCTIONS,
               fnName,
-              self.convertKeywordsToUppercase(createStatement),
+              cleanStatement,
+            );
+
+            // NEW: Collect data
+            exportedData.push({
+              name: fnName,
+              ddl: cleanStatement
+            });
+          }
+
+          // NEW: Save to DataStore (if available)
+          if (self.dataStore) {
+            await self.dataStore.saveExport(
+              dbConfig.envName,
+              self.getDBName(dbConfig.envName),
+              FUNCTIONS,
+              exportedData
             );
           }
-          return resolve(functionResults.length);
+
+          // NEW: Return both count and data
+          return resolve({
+            count: functionResults.length,
+            data: exportedData
+          });
         }
       );
     });
@@ -174,6 +212,9 @@ module.exports = class ExporterService {
             procedures_total: procedureResults.length,
           });
 
+          // NEW: Collect exported data
+          const exportedData = [];
+
           // Export procedures to separate files
           for (const row of procedureResults) {
             const spName = row.Name;
@@ -182,15 +223,39 @@ module.exports = class ExporterService {
               .promisify(connection.query)
               .call(connection, query);
             const createStatement = result[0]["Create Procedure"];
+            const cleanStatement = this.convertKeywordsToUppercase(createStatement);
+
+            // Write to file (keep for CLI/git)
             this.appendDDL(
               dbConfig.envName,
               ddlFolderPath,
               PROCEDURES,
               spName,
-              this.convertKeywordsToUppercase(createStatement),
+              cleanStatement,
+            );
+
+            // NEW: Collect data
+            exportedData.push({
+              name: spName,
+              ddl: cleanStatement
+            });
+          }
+
+          // NEW: Save to DataStore (if available)
+          if (this.dataStore) {
+            await this.dataStore.saveExport(
+              dbConfig.envName,
+              this.getDBName(dbConfig.envName),
+              PROCEDURES,
+              exportedData
             );
           }
-          return resolve(procedureResults.length);
+
+          // NEW: Return both count and data
+          return resolve({
+            count: procedureResults.length,
+            data: exportedData
+          });
         },
       );
     });
@@ -205,35 +270,101 @@ module.exports = class ExporterService {
       const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
       const ddlFolderPath = this.makeDDLFolderReady(dbPath, TABLES);
       const tableQuery = "SHOW TABLES";
+
       connection.query(tableQuery, async (err, tableResults) => {
         if (err) {
-          logger.error("Error retrieving tables: ", err);
+          if (global.logger) {
+            global.logger.error("Error retrieving tables: ", err);
+          }
           connection.end();
           reject(err);
           return;
         }
-        //
-        await this.appendReport(dbConfig.envName, {
-          tables_total: tableResults.length,
-        });
-        // Export tables to separate files
-        for (const row of tableResults) {
-          const tableName = Object.values(row)[0];
-          const query = `SHOW CREATE TABLE \`${tableName}\``;
-          const result = await util
-            .promisify(connection.query)
-            .call(connection, query);
-          const createStatement = result[0]["Create Table"];
-          const rmvAIregex = /AUTO_INCREMENT=\d+\s/;
-          this.appendDDL(
-            dbConfig.envName,
-            ddlFolderPath,
-            TABLES,
-            tableName,
-            createStatement.replace(rmvAIregex, ""),
-          );
+
+        try {
+          //
+          await this.appendReport(dbConfig.envName, {
+            tables_total: tableResults.length,
+          });
+
+          // NEW: Collect exported data
+          const exportedData = [];
+
+          // Export tables to separate files
+          for (const row of tableResults) {
+            const tableName = Object.values(row)[0];
+            const query = `SHOW CREATE TABLE \`${tableName}\``;
+
+            try {
+              const result = await util
+                .promisify(connection.query)
+                .call(connection, query);
+
+              // Validate result
+              if (!result || !result[0]) {
+                if (global.logger) {
+                  global.logger.error(`Empty result for table: ${tableName}`);
+                }
+                continue;
+              }
+
+              const createStatement = result[0]["Create Table"];
+
+              // Validate createStatement
+              if (!createStatement) {
+                if (global.logger) {
+                  global.logger.error(`No "Create Table" in result for: ${tableName}`);
+                  global.logger.error('Result keys:', Object.keys(result[0]));
+                }
+                continue;
+              }
+
+              const rmvAIregex = /AUTO_INCREMENT=\d+\s/;
+              const cleanStatement = createStatement.replace(rmvAIregex, "");
+
+              // Write to file (keep for CLI/git)
+              this.appendDDL(
+                dbConfig.envName,
+                ddlFolderPath,
+                TABLES,
+                tableName,
+                cleanStatement,
+              );
+
+              // NEW: Collect data
+              exportedData.push({
+                name: tableName,
+                ddl: cleanStatement
+              });
+            } catch (tableError) {
+              if (global.logger) {
+                global.logger.error(`Error exporting table ${tableName}:`, tableError);
+              }
+              // Continue with next table
+            }
+          }
+
+          // NEW: Save to DataStore (if available)
+          if (this.dataStore) {
+            await this.dataStore.saveExport(
+              dbConfig.envName,
+              this.getDBName(dbConfig.envName),
+              TABLES,
+              exportedData
+            );
+          }
+
+          // NEW: Return both count and data
+          return resolve({
+            count: tableResults.length,
+            data: exportedData
+          });
+        } catch (error) {
+          if (global.logger) {
+            global.logger.error("Error in exportTables:", error);
+          }
+          return reject(error);
         }
-        return resolve(tableResults.length);
       });
     });
   }
@@ -245,6 +376,35 @@ module.exports = class ExporterService {
     ddlName,
     createStatement,
   ) {
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      await this.storage.saveDDL({
+        environment: env,
+        database: this.getDBName(env),
+        type: ddlType,
+        name: ddlName,
+        content: createStatement
+      });
+      return;
+    }
+
+    // Fallback: DataStore (for Electron)
+    if (this.dataStore) {
+      // Save via dataStore if available
+      return;
+    }
+
+    // Fallback: FileManager (backward compatible)
+    // Skip if file output disabled
+    if (this.config && this.config.enableFileOutput === false) {
+      return;
+    }
+
+    // Skip if ddlFolderPath is null
+    if (!ddlFolderPath) {
+      return;
+    }
+
     const ddlFolder = `./db/${env}/${this.getDBName(env)}/current-ddl`;
     const ddlFile = `${ddlType}.list`;
     const allDll = this.fileManager.readFromFile(ddlFolder, ddlFile, 1);
@@ -291,7 +451,7 @@ module.exports = class ExporterService {
       .join("")
       .replace(/\`(GROUP|USER|GROUPS)\`/g, (match, p1) => `\`${p1.toLowerCase()}\``)
       .replace(/\t/g, "  ")
-      .replace(/\sDEFINER=`.+`@`(%|.+%)`\s/, " ");
+      .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ");
     return convertedQuery;
   }
 
@@ -303,10 +463,27 @@ module.exports = class ExporterService {
    */
   export(ddl) {
     return async (env) => {
-      logger.warn(`Start exporting ${ddl} changes for...`, env);
-      const labelTime = `..exported from ${env}.${this.getDBName(env)} success in:`;
+      const startTime = Date.now();
       const dbConfig = this.getDBDestination(env);
+
+      // Log if logger available (optional)
+      if (global.logger) {
+        global.logger.warn(`Start exporting ${ddl} changes for...`, env);
+      }
+
       // Create a MySQL connection
+      console.log('[Exporter] Creating MySQL connection...');
+      console.log('[Exporter] mysql object keys:', Object.keys(mysql));
+      console.log('[Exporter] createConnection type:', typeof mysql.createConnection);
+      // Log DB connection details (mask password)
+      console.log('[Exporter] Connecting to DB with config:', {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        port: dbConfig.port,
+        database: dbConfig.database,
+        password: dbConfig.password ? '***' : '(none)'
+      });
+
       const connection = mysql.createConnection({
         host: dbConfig.host,
         database: dbConfig.database,
@@ -314,33 +491,67 @@ module.exports = class ExporterService {
         password: dbConfig.password,
         port: dbConfig.port,
       });
-      // Connect to the MySQL server
-      connection.connect(async (err) => {
-        console.time(labelTime);
-        if (err) {
-          logger.error("Error connecting to the database: ", err);
-          process.exit(1);
-        }
-        // Retrieve the list of DDL
-        let rs;
-        switch (ddl) {
-          case TABLES:
-            rs = await this.exportTables(connection, dbConfig);
-            break;
-          case FUNCTIONS:
-            rs = await this.exportFunctions(connection, dbConfig);
-            break;
-          case PROCEDURES:
-            rs = await this.exportProcedures(connection, dbConfig);
-            break;
-          case TRIGGERS:
-            rs = await this.exportTriggers(connection, dbConfig);
-            break;
-        }
-        // Close the MySQL connection
-        connection.end();
-        logger.info(`\nThere are ${rs} ${ddl} have been..`);
-        console.timeEnd(labelTime);
+      console.log('[Exporter] Connection created');
+
+      // Connect to the MySQL server - use Promise wrapper
+      return new Promise((resolve, reject) => {
+        connection.connect(async (err) => {
+          if (err) {
+            if (global.logger) {
+              global.logger.error("Error connecting to the database: ", err);
+            }
+            reject(new Error(`Database connection failed: ${err.message}`));
+            return;
+          }
+
+          try {
+            // Retrieve the list of DDL
+            let result;
+            switch (ddl) {
+              case TABLES:
+                result = await this.exportTables(connection, dbConfig);
+                break;
+              case FUNCTIONS:
+                result = await this.exportFunctions(connection, dbConfig);
+                break;
+              case PROCEDURES:
+                result = await this.exportProcedures(connection, dbConfig);
+                break;
+              case TRIGGERS:
+                result = await this.exportTriggers(connection, dbConfig);
+                break;
+            }
+
+            // Close the MySQL connection
+            connection.end();
+
+            const duration = Date.now() - startTime;
+
+            // Extract count from result (can be number or {count, data})
+            const count = typeof result === 'object' && result.count !== undefined ? result.count : result;
+
+            // Log if logger available
+            if (global.logger) {
+              global.logger.info(`\nThere are ${count} ${ddl} exported in ${duration}ms`);
+            }
+
+            // Return structured data
+            resolve({
+              success: true,
+              ddl,
+              env,
+              database: this.getDBName(env),
+              count,
+              duration
+            });
+          } catch (error) {
+            connection.end();
+            if (global.logger) {
+              global.logger.error(`Export failed: ${error.message}`);
+            }
+            reject(error);
+          }
+        });
       });
     };
   }

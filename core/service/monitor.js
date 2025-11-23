@@ -44,10 +44,16 @@ module.exports = class MonitorService {
   async monitorVersion(connection) {
     const query = 'SELECT VERSION() AS version';
     const result = await util.promisify(connection.query).call(connection, query);
-    console.log('==============================================');
-    console.log('MySQL Version', result[0].version);
-    console.log('==============================================');
-    return result[0].version;
+    const version = result[0].version;
+    
+    // Optional console output for backward compatibility
+    if (global.logger) {
+      global.logger.info('==============================================');
+      global.logger.info('MySQL Version', version);
+      global.logger.info('==============================================');
+    }
+    
+    return version;
   }
 
   async monitorConnections(connection) {
@@ -86,38 +92,65 @@ module.exports = class MonitorService {
         password: dbConfig.password,
         port: dbConfig.port,
       });
-      // Connect to the MySQL server
-      connection.connect(async (err) => {
-        console.time(labelTime);
-        if (err) {
-          logger.error("Error connecting to the database: ", err);
-          process.exit(1);
-        }
-        let rs;
-        switch (field) {
-          case 'PROCESSLIST':
-            rs = await this.monitorProcessList(connection);
-            break;
-          case 'STATUS':
-            rs = await this.monitorStatus(connection);
-            break;
-          case 'VARIABLES':
-            rs = await this.monitorVariables(connection);
-            break;
-          case 'VERSION':
-            rs = await this.monitorVersion(connection);
-            break;
-          case 'CONNECTIONS':
-            rs = await this.monitorConnections(connection);
-            break;
-          case 'TRANSACTIONS':
-            rs = await this.monitorTransactions(connection);
-            break;
-        }
-        // Close the MySQL connection
-        connection.end();
-        logger.info(`\nThere are ${rs} ${field} have been..`);
-        console.timeEnd(labelTime);
+      // Connect to the MySQL server - use Promise wrapper
+      return new Promise((resolve, reject) => {
+        connection.connect(async (err) => {
+          const startTime = Date.now();
+          
+          if (err) {
+            if (global.logger) global.logger.error("Error connecting to the database: ", err);
+            reject(new Error(`Database connection failed: ${err.message}`));
+            return;
+          }
+          
+          try {
+            let rs;
+            switch (field) {
+              case 'PROCESSLIST':
+                rs = await this.monitorProcessList(connection);
+                break;
+              case 'STATUS':
+                rs = await this.monitorStatus(connection);
+                break;
+              case 'VARIABLES':
+                rs = await this.monitorVariables(connection);
+                break;
+              case 'VERSION':
+                rs = await this.monitorVersion(connection);
+                break;
+              case 'CONNECTIONS':
+                rs = await this.monitorConnections(connection);
+                break;
+              case 'TRANSACTIONS':
+                rs = await this.monitorTransactions(connection);
+                break;
+            }
+            
+            // Close the MySQL connection
+            connection.end();
+            
+            const duration = Date.now() - startTime;
+            
+            if (global.logger) {
+              global.logger.info(`\nMonitored ${rs} ${field} records in ${duration}ms`);
+            }
+            
+            // Return structured data
+            resolve({
+              success: true,
+              field,
+              env,
+              database: this.getDBName(env),
+              count: typeof rs === 'number' ? rs : null,
+              data: rs,
+              duration
+            });
+          } catch (error) {
+            connection.end();
+            if (global.logger) global.logger.error(`Monitor failed: ${error.message}`);
+            reject(error);
+          }
+        });
       });
     };
   }

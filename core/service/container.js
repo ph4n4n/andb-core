@@ -10,9 +10,9 @@
  * https://github.com/ph4n4n/@anph/core
  */
 const [EXPORTER, COMPARATOR, MIGRATOR, MONITOR,
-  REPORT_HELPER, FILE_MANAGER, DB_UTIL_FN, BASE_DIR,
+  REPORT_HELPER, FILE_MANAGER, DB_UTIL_FN, BASE_DIR, DATA_STORE, STORAGE,
 ] = [
-    'exporter', 'comparator', 'migrator', 'monitor', 'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir'
+    'exporter', 'comparator', 'migrator', 'monitor', 'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir', 'dataStore', 'storage'
   ];
 const ExporterService = require('./exporter');
 const ComparatorService = require('./comparator');
@@ -33,6 +33,8 @@ module.exports = class Container {
       .registerConfigurations()
       .addBaseDirectory()
       .createFileManager()
+      .createStorage()
+      .createDataStore()
       .buildReportHelper()
       .buildExporter()
       .buildComparator()
@@ -57,9 +59,10 @@ module.exports = class Container {
     this.services.set(MIGRATOR, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
+      const storage = container.get(STORAGE);
 
       return (ddl, status) => {
-        const migratorService = new MigratorService({ ...dbUtilFn, fileManager });
+        const migratorService = new MigratorService({ ...dbUtilFn, fileManager, storage });
         return migratorService.migrate(ddl, status);
       };
     });
@@ -71,13 +74,17 @@ module.exports = class Container {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const reportHelper = container.get(REPORT_HELPER);
       const fileManager = container.get(FILE_MANAGER);
+      const dataStore = container.get(DATA_STORE);
+      const storage = container.get(STORAGE);
       const comparatorService = new ComparatorService({
         ...dbUtilFn,
         appendReport: reportHelper.appendReport.bind(reportHelper),
         report2console: reportHelper.report2console.bind(reportHelper),
         report2html: reportHelper.report2html.bind(reportHelper),
         vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
-        fileManager
+        fileManager,
+        dataStore,
+        storage
       });
       return (ddl) => comparatorService.compare(ddl);
     });
@@ -89,13 +96,18 @@ module.exports = class Container {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const reportHelper = container.get(REPORT_HELPER);
       const fileManager = container.get(FILE_MANAGER);
+      const dataStore = container.get(DATA_STORE);
+      const storage = container.get(STORAGE);
       const exporterService = new ExporterService({
         ...dbUtilFn,
         appendReport: reportHelper.appendReport.bind(reportHelper),
         report2console: reportHelper.report2console.bind(reportHelper),
         report2html: reportHelper.report2html.bind(reportHelper),
         vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
-        fileManager
+        fileManager,
+        dataStore,
+        storage,
+        config: this.config
       });
       return (ddl) => exporterService.export(ddl);
     });
@@ -116,6 +128,54 @@ module.exports = class Container {
       const baseDir = container.get(BASE_DIR);
       const FileManager = require('../utils/file.helper');
       return FileManager.getInstance(baseDir);
+    });
+    return this;
+  }
+
+  createStorage() {
+    this.services.set(STORAGE, (container) => {
+      const baseDir = container.get(BASE_DIR);
+      const fileManager = container.get(FILE_MANAGER);
+      
+      // Determine storage strategy from config
+      const storageType = this.config.storage || 'file'; // Default: file (backward compatible)
+      
+      if (storageType === 'sqlite') {
+        const { SQLiteStorage } = require('../utils/storage.strategy');
+        const dbPath = this.config.storagePath || './andb.db';
+        return new SQLiteStorage(dbPath, baseDir);
+      }
+      
+      if (storageType === 'hybrid') {
+        const { HybridStorage, SQLiteStorage, FileStorage } = require('../utils/storage.strategy');
+        const dbPath = this.config.storagePath || './andb.db';
+        const sqlite = new SQLiteStorage(dbPath, baseDir);
+        const files = new FileStorage(fileManager, baseDir);
+        const autoExport = this.config.autoExport || false;
+        return new HybridStorage(sqlite, files, autoExport);
+      }
+      
+      // Default: FileStorage (backward compatible)
+      const { FileStorage } = require('../utils/storage.strategy');
+      return new FileStorage(fileManager, baseDir);
+    });
+    return this;
+  }
+
+  createDataStore() {
+    this.services.set(DATA_STORE, (container) => {
+      const { dataStore } = require('../utils/data.store');
+      const baseDir = container.get(BASE_DIR);
+      const fileManager = container.get(FILE_MANAGER);
+      
+      // Use custom dataStore from config, or default to FileStore
+      if (this.config.dataStore) {
+        return this.config.dataStore;
+      }
+      
+      // Default: FileStore for backward compatibility
+      const { FileStore } = require('../utils/data.store');
+      return new FileStore(fileManager, baseDir);
     });
     return this;
   }

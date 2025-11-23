@@ -60,3 +60,5 @@ Thumbs.db
 reports/html/ 
 
 .history/
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc

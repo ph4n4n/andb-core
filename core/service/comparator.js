@@ -9,13 +9,12 @@
  * Copyright (c) 2024 ph4n4n
  * https://github.com/ph4n4n/@anph/core
  */
-const fs = require('fs');
 const path = require('path');
 // Remove direct import of file helper
 // const { saveToFile, makeSureFolderExisted, emptyDirectory, readFromFile } = require('../utils/file.helper');
 const { getDestEnv,
-  DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS } } = require('../configs/constants');
-
+  DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS },
+  DOMAIN_NORMALIZATION } = require('../configs/constants');
 const { diffWords } = require('diff');
 
 module.exports = class ComparatorService {
@@ -23,6 +22,15 @@ module.exports = class ComparatorService {
     for (const key in dependencies) {
       this[key] = dependencies[key];
     }
+
+    // NEW: DataStore for pluggable storage
+    this.dataStore = dependencies.dataStore || null;
+
+    // NEW: Storage strategy (File/SQLite/Hybrid)
+    this.storage = dependencies.storage || null;
+
+    // Domain normalization config (can be overridden via dependencies)
+    this.domainNormalization = dependencies.domainNormalization || DOMAIN_NORMALIZATION;
   }
 
   /**
@@ -37,7 +45,6 @@ module.exports = class ComparatorService {
       const tableNameMatch = tableNameLine.match(/`([^`]+)`/);
 
       if (!tableNameMatch || tableNameMatch.length < 2) {
-        logger.error('Error parsing table name');
         return null;
       }
       const tableName = tableNameMatch[1];
@@ -107,8 +114,10 @@ module.exports = class ComparatorService {
   parseTriggerDefinition(triggerSQL) {
     try {
       const lines = triggerSQL.split('\n');
-      const triggerNameLine = lines.find(line => line.includes('CREATE TRIGGER'));
-      const triggerNameMatch = triggerNameLine?.match(/`([^`]+)`/);
+      // Fix: DEFINER clause might be present, so just look for TRIGGER keyword
+      const triggerNameLine = lines.find(line => line.includes('TRIGGER') && line.includes('`'));
+      // Fix: Look for TRIGGER keyword to avoid matching DEFINER=`root`
+      const triggerNameMatch = triggerNameLine?.match(/TRIGGER\s+`([^`]+)`/);
 
       if (!triggerNameMatch || triggerNameMatch.length < 2) {
         logger.error('Error parsing trigger name');
@@ -329,8 +338,9 @@ module.exports = class ComparatorService {
       // Log detailed changes for each table
       for (const tableName of alterColumnsList) {
         const alterSQL = this.checkDiffAndGenAlter(tableName, env);
+        logger.info(`📋 Table \`${tableName}\` has column changes:`);
         if (alterSQL.columns) {
-          logger.info(`📋 Column changes for ${tableName}: ${alterSQL.columns}`);
+          logger.info(`📋 Column changes for table \`${tableName}\`: ${alterSQL.columns}`);
         }
       }
 
@@ -386,9 +396,39 @@ module.exports = class ComparatorService {
 
   async markNewDDL(reportDDLFolder, srcLines, destLines, ddlType, destEnv) {
     const newDDL = `new.list`;
-    this.fileManager.saveToFile(reportDDLFolder, newDDL, '');
     const newLines = srcLines
       .filter(line => !destLines.includes(line)).filter(Boolean);
+
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      if (newLines.length > 0) {
+        // Save to storage
+        for (const ddlName of newLines) {
+          await this.storage.saveComparison({
+            srcEnv: this.getSourceEnv(destEnv),
+            destEnv,
+            database: this.getDBName(this.getSourceEnv(destEnv)),
+            type: ddlType,
+            name: ddlName,
+            status: 'new'
+          });
+        }
+      }
+
+      // Special handling for OTE procedures and functions
+      if (ddlType in [PROCEDURES, FUNCTIONS]) {
+        const oteLines = newLines.filter(line => line.indexOf('OTE_') > -1);
+        return {
+          [`${ddlType}_new`]: newLines.length,
+          [`${ddlType}_ote`]: oteLines.length
+        };
+      }
+
+      return { [`${ddlType}_new`]: newLines.length };
+    }
+
+    // Fallback: FileManager (backward compatible)
+    this.fileManager.saveToFile(reportDDLFolder, newDDL, '');
     this.fileManager.makeSureFolderExisted(reportDDLFolder);
     this.fileManager.emptyDirectory(`reports/diff/${destEnv}/${this.getDBName(destEnv)}/${ddlType}`);
 
@@ -418,11 +458,31 @@ module.exports = class ComparatorService {
 
   async markDeprecatedDDL(reportDDLFolder, srcLines, destLines, ddlType) {
     const deprecatedDDL = `deprecated.list`;
-    this.fileManager.saveToFile(reportDDLFolder, deprecatedDDL, '');
-
     const deprecatedLines = destLines.filter(
       line => !srcLines.includes(line)
     );
+
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      if (deprecatedLines.length > 0) {
+        // Save to storage
+        for (const ddlName of deprecatedLines) {
+          await this.storage.saveComparison({
+            srcEnv: this.getSourceEnv(),
+            destEnv: this.getDestEnv(),
+            database: this.getDBName(this.getSourceEnv()),
+            type: ddlType,
+            name: ddlName,
+            status: 'deprecated'
+          });
+        }
+      }
+
+      return { [`${ddlType}_deprecated`]: deprecatedLines.length };
+    }
+
+    // Fallback: FileManager (backward compatible)
+    this.fileManager.saveToFile(reportDDLFolder, deprecatedDDL, '');
     this.fileManager.makeSureFolderExisted(reportDDLFolder);
 
     if (deprecatedLines.length > 0) {
@@ -435,6 +495,43 @@ module.exports = class ComparatorService {
 
   async markChangeDDL(reportDDLFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
     const updatedDDL = `updated.list`;
+
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      const existedDDL = srcLines.filter(line => destLines.includes(line));
+
+      // Filter changed DDLs (now async)
+      const updatedLines = [];
+      const checkChanged = this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv);
+      for (const ddlName of existedDDL) {
+        if (await checkChanged(ddlName)) {
+          updatedLines.push(ddlName);
+        }
+      }
+
+      if (updatedLines.length > 0) {
+        // Save comparison results to storage
+        for (const ddlName of updatedLines) {
+          await this.storage.saveComparison({
+            srcEnv,
+            destEnv,
+            database: this.getDBName(srcEnv),
+            type: ddlType,
+            name: ddlName,
+            status: 'updated'
+          });
+        }
+
+        // Special handling for tables - generate ALTER files
+        if (ddlType === TABLES) {
+          await this.generateTableAlterFiles(updatedLines, srcEnv, destEnv, reportDDLFolder);
+        }
+      }
+
+      return { [`${ddlType}_updated`]: updatedLines.length };
+    }
+
+    // Fallback: FileManager (backward compatible)
     this.fileManager.saveToFile(reportDDLFolder, updatedDDL, '');
 
     const existedDDL = srcLines.filter(line => destLines.includes(line));
@@ -443,7 +540,7 @@ module.exports = class ComparatorService {
 
     // source
     const currentLines = this.fileManager.readFromFile(reportDDLFolder, updatedDDL, 1);
-    const updatedLines = existedDDL.filter(this.findDDLChanged2igrate(srcEnv, ddlType, destEnv));
+    const updatedLines = existedDDL.filter(this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv));
 
     if (updatedLines.length > 0) {
       const result = [...currentLines, ...updatedLines].sort().join('\n');
@@ -491,22 +588,45 @@ module.exports = class ComparatorService {
     }
   }
 
-  findDDLChanged2igrate(srcEnv, ddlType, destEnv) {
-    return ddlName => {
+  findDDLChanged2Migrate(srcEnv, ddlType, destEnv) {
+    return async ddlName => {
+      // Use Storage Strategy (preferred)
+      if (this.storage) {
+        const srcContent = await this.storage.getDDL(srcEnv, this.getDBName(srcEnv), ddlType, ddlName);
+        const destContent = await this.storage.getDDL(destEnv, this.getDBName(destEnv), ddlType, ddlName);
+
+        if (!srcContent || !destContent) {
+          return false;
+        }
+
+        const cleanSrc = srcContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
+        const cleanDest = destContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
+
+        if (cleanSrc !== cleanDest) {
+          logger.info('=======================================');
+          this.logDiff(cleanSrc, cleanDest);
+          logger.info('=======================================');
+          this.vimDiffToHtml(destEnv, ddlType, ddlName, `${srcEnv}/${this.getDBName(srcEnv)}/${ddlType}`, `${destEnv}/${this.getDBName(destEnv)}/${ddlType}`, `${ddlName}.sql`);
+          return true;
+        }
+        return false;
+      }
+
+      // Fallback: FileManager (backward compatible)
       const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${ddlType}`;
       const destFolder = `db/${destEnv}/${this.getDBName(destEnv)}/${ddlType}`;
-      // 1. get content current ddl ready to compare
-      const _domainRegex = /@flo(dev\.net|uat\.net|stage\.com)/g;
       const srcContent = this.fileManager.readFromFile(srcFolder, `${ddlName}.sql`)
-        .replace(_domainRegex, '@flomail.net');
+        .replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
       const destContent = this.fileManager.readFromFile(destFolder, `${ddlName}.sql`)
-        .replace(_domainRegex, '@flomail.net');
+        .replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
       if (!srcContent || !destContent) {
         return false;
       }
       if (srcContent !== destContent) {
-        // diff content compare
-        // vimDiffToHtml(destEnv, ddlType, ddlName, srcFolder, destFolder, `${ddlName}.sql`);
+        logger.info('=======================================');
+        this.logDiff(srcContent, destContent);
+        logger.info('=======================================');
+        this.vimDiffToHtml(destEnv, ddlType, ddlName, srcFolder, destFolder, `${ddlName}.sql`);
         return srcContent !== destContent;
       }
     }
@@ -583,20 +703,43 @@ module.exports = class ComparatorService {
   }
 
   async loadDDLContent(srcEnv, destEnv, ddlType) {
+    // Use Storage Strategy (preferred)
+    if (this.storage) {
+      const srcLines = await this.storage.getDDLList(srcEnv, this.getDBName(srcEnv), ddlType);
+      const destLines = await this.storage.getDDLList(destEnv, this.getDBName(destEnv), ddlType);
+
+      return {
+        srcLines: srcLines.sort(),
+        destLines: destLines.sort()
+      };
+    }
+
+    // Fallback: DataStore (for Electron)
+    if (this.dataStore) {
+      const srcLines = await this.dataStore.getDDLList(srcEnv, this.getDBName(srcEnv), ddlType);
+      const destLines = await this.dataStore.getDDLList(destEnv, this.getDBName(destEnv), ddlType);
+
+      return {
+        srcLines: srcLines.sort(),
+        destLines: destLines.sort()
+      };
+    }
+
+    // Fallback: FileManager (backward compatible)
     const srcContent = this.fileManager.readFromFile(`db/${srcEnv}/${this.getDBName(srcEnv)}/current-ddl`, `${ddlType}.list`);
     const destContent = this.fileManager.readFromFile(`db/${destEnv}/${this.getDBName(destEnv)}/current-ddl`, `${ddlType}.list`);
 
-    const srcLines = srcContent ? srcContent.split('\n').map(line => line.trim()).sort() : [];
-    const destLines = destContent ? destContent.split('\n').map(line => line.trim()).sort() : [];
+    const srcLines = srcContent ? srcContent.split('\n').map(line => line.trim()).filter(l => l).sort() : [];
+    const destLines = destContent ? destContent.split('\n').map(line => line.trim()).filter(l => l).sort() : [];
 
     return { srcLines, destLines };
   }
 
   async handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder) {
     const srcLines = this.fileManager.readFromFile(`db/${srcEnv}/${this.getDBName(srcEnv)}/current-ddl`, `triggers.list`)
-      .split('\n').map(line => line.trim()).sort();
+      .split('\n').map(line => line.trim()).filter(l => l).sort();
     const destLines = this.fileManager.readFromFile(`db/${destEnv}/${this.getDBName(destEnv)}/current-ddl`, `triggers.list`)
-      .split('\n').map(line => line.trim()).sort();
+      .split('\n').map(line => line.trim()).filter(l => l).sort();
 
     const srcTriggers = this.parseTriggerList(srcEnv, srcLines);
     const destTriggers = this.parseTriggerList(destEnv, destLines);
@@ -751,17 +894,14 @@ module.exports = class ComparatorService {
   }
 
   async logDiff(srcColumnDef, destColumnDef) {
-    console.time('---------------------------------------', srcColumnDef);
-    console.log('S:', srcColumnDef);
-    console.log('D:', destColumnDef);
-    console.log('Diff:');
-
+    logger.info('S:', srcColumnDef);
+    logger.warn('D:', destColumnDef);
+    logger.info('Diff:');
     const differences = diffWords(srcColumnDef, destColumnDef); // Use diffJson if objects
     differences.forEach(part => {
       const color = part.added ? '\x1b[32m' : part.removed ? '\x1b[31m' : '\x1b[0m';
-      process.stdout.write(color + part.value + '\x1b[0m');
+      process.stdout.write(color + part.value + '\x1b[0m\n');
     });
-    console.timeEnd('---------------------------------------', srcColumnDef);
   }
 
   /**
