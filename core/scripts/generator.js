@@ -8,11 +8,11 @@ function getDynamicEnvironments() {
   if (envEnvironments) {
     return envEnvironments.split(',').map(env => env.trim().toUpperCase());
   }
-  
+
   if (global.ANDB_CONTEXT && global.ANDB_CONTEXT.ENVIRONMENTS) {
     return Object.values(global.ANDB_CONTEXT.ENVIRONMENTS);
   }
-  
+
   // Default fallback
   return ['LOCAL', 'DEV', 'UAT', 'STAGE', 'PROD'];
 }
@@ -23,7 +23,7 @@ function getCompareEnvironments() {
   if (envCompare) {
     return envCompare.split(',').map(env => env.trim().toUpperCase());
   }
-  
+
   const allEnvs = getDynamicEnvironments();
   return allEnvs.filter(env => env !== 'LOCAL');
 }
@@ -34,7 +34,7 @@ function getMigrateEnvironments() {
   if (envMigrate) {
     return envMigrate.split(',').map(env => env.trim().toUpperCase());
   }
-  
+
   const allEnvs = getDynamicEnvironments();
   return allEnvs.filter(env => !['LOCAL', 'DEV'].includes(env));
 }
@@ -86,7 +86,7 @@ function generateExportScripts(scripts) {
   ENVIRONMENTS.forEach(env => {
     // Individual export scripts
     DDL_TYPES.forEach(type => {
-      scripts[`export:${env.toLowerCase()}:${type}`] = `node andb export ${DDL_MAPPING[type]} ${env}`;
+      scripts[`export:${env.toLowerCase()}:${type}`] = `andb export ${DDL_MAPPING[type]} ${env}`;
     });
 
     // Combined export script
@@ -99,11 +99,11 @@ function generateCompareScripts(scripts) {
   COMPARE_ENVIRONMENTS.forEach(env => {
     // Individual compare scripts
     DDL_TYPES.forEach(type => {
-      scripts[`compare:${env.toLowerCase()}:${type}`] = `node andb compare ${DDL_MAPPING[type]} ${env}`;
+      scripts[`compare:${env.toLowerCase()}:${type}`] = `andb compare ${DDL_MAPPING[type]} ${env}`;
     });
 
     // Report script
-    scripts[`compare:${env.toLowerCase()}:report`] = `node andb compare -r ${env}`;
+    scripts[`compare:${env.toLowerCase()}:report`] = `andb compare -r ${env}`;
 
     // Combined compare script
     const compareCommands = [...DDL_TYPES.map(type => `npm run compare:${env.toLowerCase()}:${type}`), `npm run compare:${env.toLowerCase()}:report`].join(' && ');
@@ -129,7 +129,7 @@ function generateMigrateScripts(scripts) {
       // New và Update scripts
       DDL_TYPES.forEach(type => {
         const command = MIGRATE_COMMAND_MAPPING[migrateType];
-        scripts[`migrate:${env.toLowerCase()}:${migrateType}:${type}`] = `node andb ${command} ${DDL_MAPPING[type]} ${env}`;
+        scripts[`migrate:${env.toLowerCase()}:${migrateType}:${type}`] = `andb ${command} ${DDL_MAPPING[type]} ${env}`;
       });
 
       // Combined migrate script for type
@@ -147,17 +147,17 @@ function generateDeprecateScripts(scripts) {
     // Deprecate scripts (bao gồm cả OTE removal)
     DDL_TYPES.forEach(type => {
       if (type === 'tbl') return; // Skip tables for deprecate
-      
-      scripts[`deprecate:${env.toLowerCase()}:${type}`] = `node andb deprecate ${DDL_MAPPING[type]} ${env}`;
+
+      scripts[`deprecate:${env.toLowerCase()}:${type}`] = `andb deprecate ${DDL_MAPPING[type]} ${env}`;
       // Thêm shorthand dep
-      scripts[`dep:${env.toLowerCase()}:${type}`] = `node andb dep ${DDL_MAPPING[type]} ${env}`;
+      scripts[`dep:${env.toLowerCase()}:${type}`] = `andb dep ${DDL_MAPPING[type]} ${env}`;
     });
 
     // OTE removal scripts (chỉ fn và sp)
     OTE_DDL_TYPES.forEach(type => {
       const oteOption = type === 'fn' ? '-rmof' : '-rmos';
-      scripts[`deprecate:${env.toLowerCase()}:${type}:ote`] = `node andb deprecate ${oteOption} ${env}`;
-      scripts[`dep:${env.toLowerCase()}:${type}:ote`] = `node andb dep ${oteOption} ${env}`;
+      scripts[`deprecate:${env.toLowerCase()}:${type}:ote`] = `andb deprecate ${oteOption} ${env}`;
+      scripts[`dep:${env.toLowerCase()}:${type}:ote`] = `andb dep ${oteOption} ${env}`;
     });
 
     // Combined deprecate script (không bao gồm tables)
@@ -181,21 +181,29 @@ function updatePackageJson() {
   // Use baseDir from global context if available, otherwise fallback to relative path
   const baseDir = global.ANDB_BASE_DIR || path.join(__dirname, '..', '..');
   const packagePath = path.join(baseDir, 'package.json');
-  
+
+  let packageJson;
+
   if (!fs.existsSync(packagePath)) {
-    console.error(`❌ Package.json not found at: ${packagePath}`);
-    return;
+    console.log('📦 package.json not found, creating one...');
+    packageJson = {
+      name: path.basename(baseDir),
+      version: "1.0.0",
+      description: "ANDB database migration project",
+      scripts: {},
+      dependencies: {}
+    };
+  } else {
+    packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
   }
-  
-  const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 
   // Generate new scripts
   const newScripts = generateScripts();
 
   // Add utility scripts with updated paths
-  newScripts['generate:scripts'] = 'node andb generate';
-  newScripts['helper'] = 'node andb helper';
-  newScripts['helper:list'] = 'node andb helper --list';
+  newScripts['generate:scripts'] = 'andb generate';
+  newScripts['helper'] = 'andb helper';
+  newScripts['helper:list'] = 'andb helper --list';
 
   // Add test scripts
   newScripts['test'] = 'jest';
@@ -215,7 +223,7 @@ function updatePackageJson() {
   console.log(`📋 All environments: ${ENVIRONMENTS.join(', ')}`);
   console.log(`🔍 Compare environments: ${COMPARE_ENVIRONMENTS.join(', ')}`);
   console.log(`🚀 Migrate environments: ${MIGRATE_ENVIRONMENTS.join(', ')}`);
-  
+
   // Show configuration source
   if (process.env.ANDB_ENVIRONMENTS || process.env.ANDB_COMPARE_ENVIRONMENTS || process.env.ANDB_MIGRATE_ENVIRONMENTS) {
     console.log(`⚙️ Configuration source: CLI options`);
@@ -240,8 +248,8 @@ if (require.main === module || global.ANDB_BASE_DIR) {
   updatePackageJson();
 }
 
-module.exports = { 
-  generateScripts, 
+module.exports = {
+  generateScripts,
   updatePackageJson,
   getDynamicEnvironments,
   getCompareEnvironments,
