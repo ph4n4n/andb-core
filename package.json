@@ -18,6 +18,7 @@
   "dependencies": {
     "andb-logger": "^1.0.3",
     "better-sqlite3": "^12.4.6",
+    "commander": "^11.1.0",
     "diff": "^5.1.0",
     "mysql2": "^3.14.3"
   },

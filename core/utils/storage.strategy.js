@@ -46,6 +46,28 @@ class StorageStrategy {
   }
 
   /**
+   * Save batch export data
+   * @param {string} env 
+   * @param {string} database 
+   * @param {string} type 
+   * @param {Array<Object>} data - Array of {name, ddl}
+   */
+  async saveExport(env, database, type, data) {
+    throw new Error('saveExport must be implemented');
+  }
+
+  /**
+   * Get batch export data
+   * @param {string} env 
+   * @param {string} database 
+   * @param {string} type 
+   * @returns {Array<Object>} Array of {name, ddl}
+   */
+  async getExport(env, database, type) {
+    throw new Error('getExport must be implemented');
+  }
+
+  /**
    * Save comparison result
    * @param {Object} comparison - {srcEnv, destEnv, database, type, name, status, ...}
    */
@@ -71,6 +93,27 @@ class StorageStrategy {
    */
   async exportToFiles() {
     throw new Error('exportToFiles must be implemented');
+  }
+
+  /**
+   * Save migration execution result
+   */
+  async saveMigration(migration) {
+    throw new Error('saveMigration must be implemented');
+  }
+
+  /**
+   * Get migration history
+   */
+  async getMigrationHistory(limit) {
+    throw new Error('getMigrationHistory must be implemented');
+  }
+
+  /**
+   * Log storage action
+   */
+  async logAction(actionType, status, details) {
+    throw new Error('logAction must be implemented');
   }
 }
 
@@ -115,6 +158,25 @@ class FileStorage extends StorageStrategy {
     return content ? content.split('\n').map(l => l.trim()).filter(l => l) : [];
   }
 
+  async saveExport(env, database, type, data) {
+    // In FileStorage, saveDDL is called for each item during export loop
+    // But we implement this for compatibility
+    for (const item of data) {
+      await this.saveDDL({ environment: env, database, type, name: item.name, content: item.ddl });
+    }
+    return true;
+  }
+
+  async getExport(env, database, type) {
+    const names = await this.getDDLList(env, database, type);
+    const results = [];
+    for (const name of names) {
+      const ddl = await this.getDDL(env, database, type, name);
+      if (ddl) results.push({ name, ddl });
+    }
+    return results;
+  }
+
   async saveComparison(comparison) {
     const { srcEnv, destEnv, database, type, name, status } = comparison;
 
@@ -156,6 +218,20 @@ class FileStorage extends StorageStrategy {
   async exportToFiles() {
     // Already in files - no-op
     return { success: true, filesExported: 0 };
+  }
+
+  async saveMigration(migration) {
+    // Filesystem doesn't formally track migration history yet
+    // Could save to a .log file if needed
+    return true;
+  }
+
+  async getMigrationHistory(limit) {
+    return [];
+  }
+
+  async logAction(actionType, status, details) {
+    return true;
   }
 }
 
@@ -222,6 +298,70 @@ class SQLiteStorage extends StorageStrategy {
 
     const results = stmt.all(environment, database, type);
     return results.map(r => r.ddl_name);
+  }
+
+  async saveExport(env, database, type, data) {
+    const crypto = require('crypto');
+    const stmt = this.db.prepare(`
+      INSERT INTO ddl_exports (environment, database_name, ddl_type, ddl_name, ddl_content, checksum)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(environment, database_name, ddl_type, ddl_name) 
+      DO UPDATE SET 
+        ddl_content = excluded.ddl_content,
+        checksum = excluded.checksum,
+        updated_at = CURRENT_TIMESTAMP,
+        exported_to_file = 0
+    `);
+
+    const transaction = this.db.transaction((items) => {
+      for (const item of items) {
+        const checksum = crypto.createHash('md5').update(item.ddl).digest('hex');
+        stmt.run(env, database, type, item.name, item.ddl, checksum);
+      }
+    });
+
+    transaction(data);
+    return true;
+  }
+
+  async getExport(env, database, type) {
+    const stmt = this.db.prepare(`
+      SELECT ddl_name as name, ddl_content as ddl FROM ddl_exports
+      WHERE environment = ? AND database_name = ? AND ddl_type = ?
+      ORDER BY ddl_name
+    `);
+    return stmt.all(env, database, type);
+  }
+
+  async saveMigration(migration) {
+    const { srcEnv, destEnv, database, type, name, operation, status, error } = migration;
+    const stmt = this.db.prepare(`
+      INSERT INTO migration_history (
+        src_environment, dest_environment, database_name, 
+        ddl_type, ddl_name, operation, status, error_message
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(srcEnv, destEnv, database, type, name, operation, status, error || null);
+    return true;
+  }
+
+  async getMigrationHistory(limit = 100) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM migration_history 
+      ORDER BY executed_at DESC 
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+
+  async logAction(actionType, status, details) {
+    const stmt = this.db.prepare(`
+      INSERT INTO storage_actions (action_type, status, details)
+      VALUES (?, ?, ?)
+    `);
+    stmt.run(actionType, status, typeof details === 'object' ? JSON.stringify(details) : details);
+    return true;
   }
 
   async saveComparison(comparison) {

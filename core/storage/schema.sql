@@ -131,6 +131,39 @@ CREATE TABLE IF NOT EXISTS export_queue (
 CREATE INDEX IF NOT EXISTS idx_queue_status ON export_queue(status, priority DESC);
 
 -- ============================================
+-- Migration History
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS migration_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  src_environment TEXT NOT NULL,
+  dest_environment TEXT NOT NULL,
+  database_name TEXT NOT NULL,
+  ddl_type TEXT NOT NULL,
+  ddl_name TEXT NOT NULL,
+  operation TEXT NOT NULL,            -- CREATE, ALTER, DROP
+  status TEXT NOT NULL,               -- SUCCESS, FAILED
+  error_message TEXT,
+  executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  executed_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mig_env ON migration_history(src_environment, dest_environment);
+CREATE INDEX IF NOT EXISTS idx_mig_status ON migration_history(status);
+
+-- ============================================
+-- Storage Actions Log
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS storage_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  action_type TEXT NOT NULL,          -- EXPORT, COMPARE, MIGRATE, SYNC
+  status TEXT NOT NULL,
+  details TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
 -- Metadata & Configuration
 -- ============================================
 

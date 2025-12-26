@@ -140,31 +140,47 @@ module.exports = class ExporterService {
           for (const row of functionResults) {
             const fnName = row.Name;
             const query = `SHOW CREATE FUNCTION ${fnName}`;
-            const result = await util
-              .promisify(connection.query)
-              .call(connection, query);
-            const createStatement = result[0]["Create Function"];
-            const cleanStatement = self.convertKeywordsToUppercase(createStatement);
 
-            // Write to file (keep for CLI/git)
-            self.appendDDL(
-              dbConfig.envName,
-              ddlFolderPath,
-              FUNCTIONS,
-              fnName,
-              cleanStatement,
-            );
+            try {
+              const result = await util
+                .promisify(connection.query)
+                .call(connection, query);
 
-            // NEW: Collect data
-            exportedData.push({
-              name: fnName,
-              ddl: cleanStatement
-            });
+              const createStatement = result[0]["Create Function"];
+
+              if (!createStatement) {
+                if (global.logger) {
+                  global.logger.warn(`Skipping function ${fnName}: No CREATE FUNCTION statement found`);
+                }
+                continue;
+              }
+
+              const cleanStatement = self.convertKeywordsToUppercase(createStatement);
+
+              // Write to file (keep for CLI/git)
+              self.appendDDL(
+                dbConfig.envName,
+                ddlFolderPath,
+                FUNCTIONS,
+                fnName,
+                cleanStatement,
+              );
+
+              // NEW: Collect data
+              exportedData.push({
+                name: fnName,
+                ddl: cleanStatement
+              });
+            } catch (fnError) {
+              if (global.logger) {
+                global.logger.error(`Error exporting function ${fnName}:`, fnError.message);
+              }
+            }
           }
 
-          // NEW: Save to DataStore (if available)
-          if (self.dataStore) {
-            await self.dataStore.saveExport(
+          // NEW: Save to Storage (if available)
+          if (self.storage) {
+            await self.storage.saveExport(
               dbConfig.envName,
               self.getDBName(dbConfig.envName),
               FUNCTIONS,
@@ -219,31 +235,47 @@ module.exports = class ExporterService {
           for (const row of procedureResults) {
             const spName = row.Name;
             const query = `SHOW CREATE PROCEDURE ${spName}`;
-            const result = await util
-              .promisify(connection.query)
-              .call(connection, query);
-            const createStatement = result[0]["Create Procedure"];
-            const cleanStatement = this.convertKeywordsToUppercase(createStatement);
 
-            // Write to file (keep for CLI/git)
-            this.appendDDL(
-              dbConfig.envName,
-              ddlFolderPath,
-              PROCEDURES,
-              spName,
-              cleanStatement,
-            );
+            try {
+              const result = await util
+                .promisify(connection.query)
+                .call(connection, query);
 
-            // NEW: Collect data
-            exportedData.push({
-              name: spName,
-              ddl: cleanStatement
-            });
+              const createStatement = result[0]["Create Procedure"];
+
+              if (!createStatement) {
+                if (global.logger) {
+                  global.logger.warn(`Skipping procedure ${spName}: No CREATE PROCEDURE statement found`);
+                }
+                continue;
+              }
+
+              const cleanStatement = this.convertKeywordsToUppercase(createStatement);
+
+              // Write to file (keep for CLI/git)
+              this.appendDDL(
+                dbConfig.envName,
+                ddlFolderPath,
+                PROCEDURES,
+                spName,
+                cleanStatement,
+              );
+
+              // NEW: Collect data
+              exportedData.push({
+                name: spName,
+                ddl: cleanStatement
+              });
+            } catch (spError) {
+              if (global.logger) {
+                global.logger.error(`Error exporting procedure ${spName}:`, spError.message);
+              }
+            }
           }
 
-          // NEW: Save to DataStore (if available)
-          if (this.dataStore) {
-            await this.dataStore.saveExport(
+          // NEW: Save to Storage (if available)
+          if (this.storage) {
+            await this.storage.saveExport(
               dbConfig.envName,
               this.getDBName(dbConfig.envName),
               PROCEDURES,
@@ -312,7 +344,10 @@ module.exports = class ExporterService {
 
               // Validate createStatement
               if (!createStatement) {
-                if (global.logger) {
+                // This is likely a VIEW, not a TABLE - skip it
+                if (global.logger && result[0]['Create View']) {
+                  global.logger.warn(`Skipping VIEW: ${tableName} (use export views command for views)`);
+                } else if (global.logger) {
                   global.logger.error(`No "Create Table" in result for: ${tableName}`);
                   global.logger.error('Result keys:', Object.keys(result[0]));
                 }
@@ -344,9 +379,9 @@ module.exports = class ExporterService {
             }
           }
 
-          // NEW: Save to DataStore (if available)
-          if (this.dataStore) {
-            await this.dataStore.saveExport(
+          // NEW: Save to Storage (if available)
+          if (this.storage) {
+            await this.storage.saveExport(
               dbConfig.envName,
               this.getDBName(dbConfig.envName),
               TABLES,
@@ -376,7 +411,7 @@ module.exports = class ExporterService {
     ddlName,
     createStatement,
   ) {
-    // Use Storage Strategy (preferred)
+    // Unified Storage Strategy handles this
     if (this.storage) {
       await this.storage.saveDDL({
         environment: env,
@@ -385,12 +420,6 @@ module.exports = class ExporterService {
         name: ddlName,
         content: createStatement
       });
-      return;
-    }
-
-    // Fallback: DataStore (for Electron)
-    if (this.dataStore) {
-      // Save via dataStore if available
       return;
     }
 
@@ -472,18 +501,6 @@ module.exports = class ExporterService {
       }
 
       // Create a MySQL connection
-      console.log('[Exporter] Creating MySQL connection...');
-      console.log('[Exporter] mysql object keys:', Object.keys(mysql));
-      console.log('[Exporter] createConnection type:', typeof mysql.createConnection);
-      // Log DB connection details (mask password)
-      console.log('[Exporter] Connecting to DB with config:', {
-        host: dbConfig.host,
-        user: dbConfig.user,
-        port: dbConfig.port,
-        database: dbConfig.database,
-        password: dbConfig.password ? '***' : '(none)'
-      });
-
       const connection = mysql.createConnection({
         host: dbConfig.host,
         database: dbConfig.database,
@@ -491,7 +508,7 @@ module.exports = class ExporterService {
         password: dbConfig.password,
         port: dbConfig.port,
       });
-      console.log('[Exporter] Connection created');
+
 
       // Connect to the MySQL server - use Promise wrapper
       return new Promise((resolve, reject) => {

@@ -10,11 +10,10 @@
  * https://github.com/ph4n4n/@anph/core
  */
 const path = require('path');
-// Remove direct import of file helper
-// const { saveToFile, makeSureFolderExisted, emptyDirectory, readFromFile } = require('../utils/file.helper');
-const { getDestEnv,
+const {
   DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS },
-  DOMAIN_NORMALIZATION } = require('../configs/constants');
+  DOMAIN_NORMALIZATION
+} = require('../configs/constants');
 const { diffWords } = require('diff');
 
 module.exports = class ComparatorService {
@@ -23,10 +22,7 @@ module.exports = class ComparatorService {
       this[key] = dependencies[key];
     }
 
-    // NEW: DataStore for pluggable storage
-    this.dataStore = dependencies.dataStore || null;
-
-    // NEW: Storage strategy (File/SQLite/Hybrid)
+    // Unified Storage strategy (File/SQLite/Hybrid)
     this.storage = dependencies.storage || null;
 
     // Domain normalization config (can be overridden via dependencies)
@@ -76,7 +72,7 @@ module.exports = class ComparatorService {
           // Parse only non-empty lines inside column definitions
           const columnNameMatch = line.match(/`([^`]+)`/);
           if (!columnNameMatch || columnNameMatch.length < 2) {
-            logger.error('Error parsing column name');
+            if (global.logger) global.logger.error('Error parsing column name');
             return null;
           }
           const columnName = columnNameMatch[1];
@@ -101,7 +97,7 @@ module.exports = class ComparatorService {
         indexes,
       };
     } catch (error) {
-      logger.error('Error parsing table definition:', error);
+      if (global.logger) global.logger.error('Error parsing table definition:', error);
       return null;
     }
   }
@@ -120,7 +116,7 @@ module.exports = class ComparatorService {
       const triggerNameMatch = triggerNameLine?.match(/TRIGGER\s+`([^`]+)`/);
 
       if (!triggerNameMatch || triggerNameMatch.length < 2) {
-        logger.error('Error parsing trigger name');
+        if (global.logger) global.logger.error('Error parsing trigger name');
         return null;
       }
 
@@ -137,7 +133,7 @@ module.exports = class ComparatorService {
         definition: triggerSQL
       };
     } catch (error) {
-      logger.error('Error parsing trigger definition:', error);
+      if (global.logger) global.logger.error('Error parsing trigger definition:', error);
       return null;
     }
   }
@@ -149,10 +145,6 @@ module.exports = class ComparatorService {
    * @returns 
    */
   generateAlterSQL(srcTableDefinition, destTableDefinition) {
-    // 1. Compare primary keys NOT allowed
-    // if (srcTableDefinition.primaryKey.join(',') !== destTableDefinition.primaryKey.join(',')) {
-    //    alterSQL.push(`DROP PRIMARY KEY, ADD PRIMARY KEY (${srcTableDefinition.primaryKey.join(',')})`);
-    // }
     // 2. Compare columns
     const { alterColumns, missingColumns, missingColumnsAlter } = this.compareColumns(srcTableDefinition, destTableDefinition);
     // 3. Compare Indexes
@@ -261,7 +253,6 @@ module.exports = class ComparatorService {
    */
   compareIndexes(srcTableDefinition, destTableDefinition) {
     const alterIndexes = [];
-    const removeBTREE = (idx) => idx.replace(/\s?(,|USING BTREE)/g, '').trim();
 
     // Check if any indexes are missing in the destination table
     for (const indexName in srcTableDefinition.indexes) {
@@ -325,34 +316,36 @@ module.exports = class ComparatorService {
       }
 
       // Just report what changes would be made, no database connection needed
-      logger.info(`📋 Found ${alterColumnsList.length} tables with column changes`);
-      logger.info(`📋 Found ${alterIndexesList.length} tables with index changes`);
+      if (global.logger) {
+        global.logger.info(`📋 Found ${alterColumnsList.length} tables with column changes`);
+        global.logger.info(`📋 Found ${alterIndexesList.length} tables with index changes`);
+      }
 
       if (alterColumnsList.length > 0) {
-        logger.info(`📋 Tables with column changes: ${alterColumnsList.join(', ')}`);
+        if (global.logger) global.logger.info(`📋 Tables with column changes: ${alterColumnsList.join(', ')}`);
       }
       if (alterIndexesList.length > 0) {
-        logger.info(`📋 Tables with index changes: ${alterIndexesList.join(', ')}`);
+        if (global.logger) global.logger.info(`📋 Tables with index changes: ${alterIndexesList.join(', ')}`);
       }
 
       // Log detailed changes for each table
       for (const tableName of alterColumnsList) {
         const alterSQL = this.checkDiffAndGenAlter(tableName, env);
-        logger.info(`📋 Table \`${tableName}\` has column changes:`);
+        if (global.logger) global.logger.info(`📋 Table \`${tableName}\` has column changes:`);
         if (alterSQL.columns) {
-          logger.info(`📋 Column changes for table \`${tableName}\`: ${alterSQL.columns}`);
+          if (global.logger) global.logger.info(`📋 Column changes for table \`${tableName}\`: ${alterSQL.columns}`);
         }
       }
 
       for (const tableName of alterIndexesList) {
         const alterSQL = this.checkDiffAndGenAlter(tableName, env);
         if (alterSQL.indexes) {
-          logger.info(`📋 Index changes for ${tableName}: ${alterSQL.indexes}`);
+          if (global.logger) global.logger.info(`📋 Index changes for ${tableName}: ${alterSQL.indexes}`);
         }
       }
 
     } catch (error) {
-      logger.error('Error in reportTableStructureChange:', error);
+      if (global.logger) global.logger.error('Error in reportTableStructureChange:', error);
     }
   }
 
@@ -369,7 +362,6 @@ module.exports = class ComparatorService {
   }
 
   checkDiffAndGenAlter(tableName, env) {
-    const fTable = path.join(`map-migrate`, `${this.getSourceEnv(env)}-to-${env}`, `${this.getDBName(this.getSourceEnv(env))}`, `tables`);
     const srcFolder = `db/${this.getSourceEnv(env)}/${this.getDBName(this.getSourceEnv(env))}/tables`;
     const destFolder = `db/${env}/${this.getDBName(env)}/tables`;
 
@@ -395,14 +387,13 @@ module.exports = class ComparatorService {
   }
 
   async markNewDDL(reportDDLFolder, srcLines, destLines, ddlType, destEnv) {
-    const newDDL = `new.list`;
+    const newDDLFile = `new.list`;
     const newLines = srcLines
       .filter(line => !destLines.includes(line)).filter(Boolean);
 
-    // Use Storage Strategy (preferred)
+    // Unified Storage Strategy handles this
     if (this.storage) {
       if (newLines.length > 0) {
-        // Save to storage
         for (const ddlName of newLines) {
           await this.storage.saveComparison({
             srcEnv: this.getSourceEnv(destEnv),
@@ -415,57 +406,51 @@ module.exports = class ComparatorService {
         }
       }
 
-      // Special handling for OTE procedures and functions
-      if (ddlType in [PROCEDURES, FUNCTIONS]) {
+      if ([PROCEDURES, FUNCTIONS].includes(ddlType)) {
         const oteLines = newLines.filter(line => line.indexOf('OTE_') > -1);
         return {
           [`${ddlType}_new`]: newLines.length,
           [`${ddlType}_ote`]: oteLines.length
         };
       }
-
       return { [`${ddlType}_new`]: newLines.length };
     }
 
     // Fallback: FileManager (backward compatible)
-    this.fileManager.saveToFile(reportDDLFolder, newDDL, '');
+    this.fileManager.saveToFile(reportDDLFolder, newDDLFile, '');
     this.fileManager.makeSureFolderExisted(reportDDLFolder);
     this.fileManager.emptyDirectory(`reports/diff/${destEnv}/${this.getDBName(destEnv)}/${ddlType}`);
 
     if (newLines.length > 0) {
       const result = newLines.sort().join('\n');
-      this.fileManager.saveToFile(reportDDLFolder, newDDL, result);
+      this.fileManager.saveToFile(reportDDLFolder, newDDLFile, result);
     }
 
-    // Special handling for OTE procedures and functions
-    if (ddlType in [PROCEDURES, FUNCTIONS]) {
+    if ([PROCEDURES, FUNCTIONS].includes(ddlType)) {
       const oteDDL = `ote.list`;
       const oteLines = newLines.filter(line => line.indexOf('OTE_') > -1);
       if (oteLines.length > 0) {
         const oteResult = oteLines.sort().join('\n');
         this.fileManager.saveToFile(reportDDLFolder, oteDDL, oteResult);
       }
-      // add to report
       return {
         [`${ddlType}_new`]: newLines.length,
         [`${ddlType}_ote`]: oteLines.length
       };
     }
 
-    // add to report
     return { [`${ddlType}_new`]: newLines.length };
   }
 
   async markDeprecatedDDL(reportDDLFolder, srcLines, destLines, ddlType) {
-    const deprecatedDDL = `deprecated.list`;
+    const deprecatedDDLFile = `deprecated.list`;
     const deprecatedLines = destLines.filter(
       line => !srcLines.includes(line)
     );
 
-    // Use Storage Strategy (preferred)
+    // Unified Storage Strategy handles this
     if (this.storage) {
       if (deprecatedLines.length > 0) {
-        // Save to storage
         for (const ddlName of deprecatedLines) {
           await this.storage.saveComparison({
             srcEnv: this.getSourceEnv(),
@@ -477,40 +462,36 @@ module.exports = class ComparatorService {
           });
         }
       }
-
       return { [`${ddlType}_deprecated`]: deprecatedLines.length };
     }
 
-    // Fallback: FileManager (backward compatible)
-    this.fileManager.saveToFile(reportDDLFolder, deprecatedDDL, '');
+    // Fallback: FileManager
+    this.fileManager.saveToFile(reportDDLFolder, deprecatedDDLFile, '');
     this.fileManager.makeSureFolderExisted(reportDDLFolder);
 
     if (deprecatedLines.length > 0) {
       const result = deprecatedLines.sort().join('\n');
-      this.fileManager.saveToFile(reportDDLFolder, deprecatedDDL, result);
+      this.fileManager.saveToFile(reportDDLFolder, deprecatedDDLFile, result);
     }
-    // add to report
     return { [`${ddlType}_deprecated`]: deprecatedLines.length };
   }
 
   async markChangeDDL(reportDDLFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
-    const updatedDDL = `updated.list`;
+    const updatedDDLFile = `updated.list`;
+    const existedDDL = srcLines.filter(line => destLines.includes(line));
 
-    // Use Storage Strategy (preferred)
-    if (this.storage) {
-      const existedDDL = srcLines.filter(line => destLines.includes(line));
-
-      // Filter changed DDLs (now async)
-      const updatedLines = [];
-      const checkChanged = this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv);
-      for (const ddlName of existedDDL) {
-        if (await checkChanged(ddlName)) {
-          updatedLines.push(ddlName);
-        }
+    // Filter changed DDLs
+    const updatedLines = [];
+    const checkChanged = this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv);
+    for (const ddlName of existedDDL) {
+      if (await checkChanged(ddlName)) {
+        updatedLines.push(ddlName);
       }
+    }
 
+    // Unified Storage Strategy handles this
+    if (this.storage) {
       if (updatedLines.length > 0) {
-        // Save comparison results to storage
         for (const ddlName of updatedLines) {
           await this.storage.saveComparison({
             srcEnv,
@@ -521,68 +502,50 @@ module.exports = class ComparatorService {
             status: 'updated'
           });
         }
-
-        // Special handling for tables - generate ALTER files
         if (ddlType === TABLES) {
           await this.generateTableAlterFiles(updatedLines, srcEnv, destEnv, reportDDLFolder);
         }
       }
-
       return { [`${ddlType}_updated`]: updatedLines.length };
     }
 
-    // Fallback: FileManager (backward compatible)
-    this.fileManager.saveToFile(reportDDLFolder, updatedDDL, '');
-
-    const existedDDL = srcLines.filter(line => destLines.includes(line));
+    // Fallback: FileManager
+    this.fileManager.saveToFile(reportDDLFolder, updatedDDLFile, '');
     this.fileManager.makeSureFolderExisted(reportDDLFolder);
     this.fileManager.emptyDirectory(`reports/diff/${destEnv}/${this.getDBName(destEnv)}/${ddlType}`);
 
-    // source
-    const currentLines = this.fileManager.readFromFile(reportDDLFolder, updatedDDL, 1);
-    const updatedLines = existedDDL.filter(this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv));
-
     if (updatedLines.length > 0) {
-      const result = [...currentLines, ...updatedLines].sort().join('\n');
-      this.fileManager.saveToFile(reportDDLFolder, updatedDDL, result);
-
-      // Special handling for tables - generate ALTER files
+      const result = updatedLines.sort().join('\n');
+      this.fileManager.saveToFile(reportDDLFolder, updatedDDLFile, result);
       if (ddlType === TABLES) {
         await this.generateTableAlterFiles(updatedLines, srcEnv, destEnv, reportDDLFolder);
       }
     }
 
-    // add to report
     return { [`${ddlType}_updated`]: updatedLines.length };
   }
 
   async generateTableAlterFiles(updatedTables, srcEnv, destEnv, reportDDLFolder) {
     const alterColumnsList = [];
     const alterIndexesList = [];
-    const alterColumnsChanges = {};
-    const alterIndexesChanges = {};
 
     for (const tableName of updatedTables) {
       const alterResult = this.checkDiffAndGenAlter(tableName, destEnv);
 
       if (alterResult.columns && alterResult.columns.length > 0) {
         alterColumnsList.push(tableName);
-        alterColumnsChanges[tableName] = alterResult.columns;
         this.writeAlter(destEnv, tableName, 'columns', alterResult.columns);
       }
 
       if (alterResult.indexes && alterResult.indexes.length > 0) {
         alterIndexesList.push(tableName);
-        alterIndexesChanges[tableName] = alterResult.indexes;
         this.writeAlter(destEnv, tableName, 'indexes', alterResult.indexes);
       }
     }
 
-    // Update alter lists
     if (alterColumnsList.length > 0) {
       this.fileManager.saveToFile(reportDDLFolder, 'alter-columns.list', alterColumnsList.join('\n'));
     }
-
     if (alterIndexesList.length > 0) {
       this.fileManager.saveToFile(reportDDLFolder, 'alter-indexes.list', alterIndexesList.join('\n'));
     }
@@ -590,45 +553,33 @@ module.exports = class ComparatorService {
 
   findDDLChanged2Migrate(srcEnv, ddlType, destEnv) {
     return async ddlName => {
-      // Use Storage Strategy (preferred)
+      let srcContent, destContent;
+
       if (this.storage) {
-        const srcContent = await this.storage.getDDL(srcEnv, this.getDBName(srcEnv), ddlType, ddlName);
-        const destContent = await this.storage.getDDL(destEnv, this.getDBName(destEnv), ddlType, ddlName);
+        srcContent = await this.storage.getDDL(srcEnv, this.getDBName(srcEnv), ddlType, ddlName);
+        destContent = await this.storage.getDDL(destEnv, this.getDBName(destEnv), ddlType, ddlName);
+      } else {
+        const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${ddlType}`;
+        const destFolder = `db/${destEnv}/${this.getDBName(destEnv)}/${ddlType}`;
+        srcContent = this.fileManager.readFromFile(srcFolder, `${ddlName}.sql`);
+        destContent = this.fileManager.readFromFile(destFolder, `${ddlName}.sql`);
+      }
 
-        if (!srcContent || !destContent) {
-          return false;
-        }
+      if (!srcContent || !destContent) return false;
 
-        const cleanSrc = srcContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
-        const cleanDest = destContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
+      const cleanSrc = srcContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
+      const cleanDest = destContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
 
-        if (cleanSrc !== cleanDest) {
-          logger.info('=======================================');
+      if (cleanSrc !== cleanDest) {
+        if (global.logger) {
+          global.logger.info('=======================================');
           this.logDiff(cleanSrc, cleanDest);
-          logger.info('=======================================');
-          this.vimDiffToHtml(destEnv, ddlType, ddlName, `${srcEnv}/${this.getDBName(srcEnv)}/${ddlType}`, `${destEnv}/${this.getDBName(destEnv)}/${ddlType}`, `${ddlName}.sql`);
-          return true;
+          global.logger.info('=======================================');
         }
-        return false;
+        this.vimDiffToHtml(destEnv, ddlType, ddlName, `${srcEnv}/${this.getDBName(srcEnv)}/${ddlType}`, `${destEnv}/${this.getDBName(destEnv)}/${ddlType}`, `${ddlName}.sql`);
+        return true;
       }
-
-      // Fallback: FileManager (backward compatible)
-      const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${ddlType}`;
-      const destFolder = `db/${destEnv}/${this.getDBName(destEnv)}/${ddlType}`;
-      const srcContent = this.fileManager.readFromFile(srcFolder, `${ddlName}.sql`)
-        .replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
-      const destContent = this.fileManager.readFromFile(destFolder, `${ddlName}.sql`)
-        .replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
-      if (!srcContent || !destContent) {
-        return false;
-      }
-      if (srcContent !== destContent) {
-        logger.info('=======================================');
-        this.logDiff(srcContent, destContent);
-        logger.info('=======================================');
-        this.vimDiffToHtml(destEnv, ddlType, ddlName, srcFolder, destFolder, `${ddlName}.sql`);
-        return srcContent !== destContent;
-      }
+      return false;
     }
   }
 
@@ -642,22 +593,37 @@ module.exports = class ComparatorService {
 
       if (!srcLines.length) return;
 
-      logger.info('Comparing...', srcLines.length, '->', destLines.length, ddlType);
+      if (global.logger) global.logger.info('Comparing...', srcLines.length, '->', destLines.length, ddlType);
 
-      // Handle triggers specially
       if (ddlType === TRIGGERS) {
         await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder);
       }
 
-      // Process DDL changes
       const newDDL = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, destEnv);
       const updatedDDL = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv);
       const deprecatedDDL = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType);
 
-      // Generate reports
+      // Log detailed comparison results
+      if (global.logger) {
+        const newCount = newDDL[`${ddlType}_new`] || 0;
+        const updatedCount = updatedDDL[`${ddlType}_updated`] || 0;
+        const deprecatedCount = deprecatedDDL[`${ddlType}_deprecated`] || 0;
+        const totalChanges = newCount + updatedCount + deprecatedCount;
+
+        global.logger.info(`\n📊 Comparison Results for ${ddlType}:`);
+        global.logger.info(`  ✨ New: ${newCount}`);
+        global.logger.info(`  🔄 Updated: ${updatedCount}`);
+        global.logger.info(`  ⚠️  Deprecated: ${deprecatedCount}`);
+        global.logger.info(`  📈 Total changes: ${totalChanges}`);
+
+        if (totalChanges === 0) {
+          global.logger.info(`  ✅ No changes detected - environments are in sync`);
+        }
+      }
+
       await this.generateReports(destEnv, { ...newDDL, ...deprecatedDDL, ...updatedDDL });
     } catch (error) {
-      logger.error('Error in reportDLLChange:', error);
+      if (global.logger) global.logger.error('Error in reportDLLChange:', error);
     }
   }
 
@@ -667,30 +633,25 @@ module.exports = class ComparatorService {
       if (destEnv === srcEnv) return;
 
       const mapMigrateFolder = this.setupMigrationFolder(srcEnv, destEnv);
-
-      // Load trigger content specifically
       const { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS);
 
-      logger.info('Comparing triggers...', srcLines.length, '->', destLines.length);
+      if (global.logger) global.logger.info('Comparing triggers...', srcLines.length, '->', destLines.length);
 
-      // Handle trigger comparison
       await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder);
 
-      // Process trigger changes (new, updated, deprecated)
       const newTriggers = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, 'triggers', destEnv);
       const updatedTriggers = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
       const deprecatedTriggers = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers');
 
-      // Generate reports
       await this.generateReports(destEnv, { ...newTriggers, ...deprecatedTriggers, ...updatedTriggers });
     } catch (error) {
-      logger.error('Error in reportTriggerChange:', error);
+      if (global.logger) global.logger.error('Error in reportTriggerChange:', error);
     }
   }
 
   getDestinationEnvironment(srcEnv, destEnv) {
     if (!destEnv) {
-      destEnv = getDestEnv(srcEnv);
+      destEnv = this.getDestEnv(srcEnv);
     }
     return destEnv;
   }
@@ -703,32 +664,14 @@ module.exports = class ComparatorService {
   }
 
   async loadDDLContent(srcEnv, destEnv, ddlType) {
-    // Use Storage Strategy (preferred)
     if (this.storage) {
       const srcLines = await this.storage.getDDLList(srcEnv, this.getDBName(srcEnv), ddlType);
       const destLines = await this.storage.getDDLList(destEnv, this.getDBName(destEnv), ddlType);
-
-      return {
-        srcLines: srcLines.sort(),
-        destLines: destLines.sort()
-      };
+      return { srcLines: srcLines.sort(), destLines: destLines.sort() };
     }
 
-    // Fallback: DataStore (for Electron)
-    if (this.dataStore) {
-      const srcLines = await this.dataStore.getDDLList(srcEnv, this.getDBName(srcEnv), ddlType);
-      const destLines = await this.dataStore.getDDLList(destEnv, this.getDBName(destEnv), ddlType);
-
-      return {
-        srcLines: srcLines.sort(),
-        destLines: destLines.sort()
-      };
-    }
-
-    // Fallback: FileManager (backward compatible)
     const srcContent = this.fileManager.readFromFile(`db/${srcEnv}/${this.getDBName(srcEnv)}/current-ddl`, `${ddlType}.list`);
     const destContent = this.fileManager.readFromFile(`db/${destEnv}/${this.getDBName(destEnv)}/current-ddl`, `${ddlType}.list`);
-
     const srcLines = srcContent ? srcContent.split('\n').map(line => line.trim()).filter(l => l).sort() : [];
     const destLines = destContent ? destContent.split('\n').map(line => line.trim()).filter(l => l).sort() : [];
 
@@ -736,13 +679,9 @@ module.exports = class ComparatorService {
   }
 
   async handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder) {
-    const srcLines = this.fileManager.readFromFile(`db/${srcEnv}/${this.getDBName(srcEnv)}/current-ddl`, `triggers.list`)
-      .split('\n').map(line => line.trim()).filter(l => l).sort();
-    const destLines = this.fileManager.readFromFile(`db/${destEnv}/${this.getDBName(destEnv)}/current-ddl`, `triggers.list`)
-      .split('\n').map(line => line.trim()).filter(l => l).sort();
-
-    const srcTriggers = this.parseTriggerList(srcEnv, srcLines);
-    const destTriggers = this.parseTriggerList(destEnv, destLines);
+    const { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS);
+    const srcTriggers = await this.parseTriggerList(srcEnv, srcLines);
+    const destTriggers = await this.parseTriggerList(destEnv, destLines);
     const triggerChanges = this.compareTriggerLists(srcTriggers, destTriggers);
 
     if (triggerChanges.length > 0) {
@@ -750,97 +689,70 @@ module.exports = class ComparatorService {
     }
   }
 
-  parseTriggerList(env, lines) {
-    return lines.map(line => {
-      const content = this.fileManager.readFromFile(`db/${env}/${this.getDBName(env)}/triggers`, `${line}.sql`);
-      return this.parseTriggerDefinition(content);
-    }).filter(Boolean);
+  async parseTriggerList(env, lines) {
+    const list = [];
+    for (const line of lines) {
+      let content;
+      if (this.storage) {
+        content = await this.storage.getDDL(env, this.getDBName(env), TRIGGERS, line);
+      } else {
+        content = this.fileManager.readFromFile(`db/${env}/${this.getDBName(env)}/triggers`, `${line}.sql`);
+      }
+      const parsed = this.parseTriggerDefinition(content);
+      if (parsed) list.push(parsed);
+    }
+    return list;
   }
 
   compareTriggerLists(srcTriggers, destTriggers) {
     const triggerChanges = [];
     const duplicateWarnings = [];
 
-    // Check for duplicate triggers in source
     const srcDuplicates = this.findDuplicateTriggers(srcTriggers);
-    if (srcDuplicates.length > 0) {
-      duplicateWarnings.push({
-        type: 'source_duplicates',
-        duplicates: srcDuplicates
-      });
-    }
+    if (srcDuplicates.length > 0) duplicateWarnings.push({ type: 'source_duplicates', duplicates: srcDuplicates });
 
-    // Check for duplicate triggers in destination
     const destDuplicates = this.findDuplicateTriggers(destTriggers);
-    if (destDuplicates.length > 0) {
-      duplicateWarnings.push({
-        type: 'destination_duplicates',
-        duplicates: destDuplicates
-      });
-    }
+    if (destDuplicates.length > 0) duplicateWarnings.push({ type: 'destination_duplicates', duplicates: destDuplicates });
 
-    // Compare triggers
     for (const srcTrigger of srcTriggers) {
       const destTrigger = destTriggers.find(t => t.triggerName === srcTrigger.triggerName);
       const comparison = this.compareTriggers(srcTrigger, destTrigger);
-
       if (comparison?.hasChanges) {
-        triggerChanges.push({
-          triggerName: srcTrigger.triggerName,
-          changes: comparison.differences
-        });
+        triggerChanges.push({ triggerName: srcTrigger.triggerName, changes: comparison.differences });
       }
     }
 
-    // Log warnings if any
-    if (duplicateWarnings.length > 0) {
-      this.logDuplicateTriggerWarnings(duplicateWarnings);
-    }
-
+    if (duplicateWarnings.length > 0) this.logDuplicateTriggerWarnings(duplicateWarnings);
     return triggerChanges;
   }
 
   findDuplicateTriggers(triggers) {
     const duplicates = [];
     const triggerGroups = {};
-
-    // Group triggers by table, event, and timing
     for (const trigger of triggers) {
       const key = `${trigger.tableName}_${trigger.event}_${trigger.timing}`;
-      if (!triggerGroups[key]) {
-        triggerGroups[key] = [];
-      }
+      if (!triggerGroups[key]) triggerGroups[key] = [];
       triggerGroups[key].push(trigger);
     }
-
-    // Find groups with multiple triggers
     for (const [key, triggerList] of Object.entries(triggerGroups)) {
       if (triggerList.length > 1) {
         const [tableName, event, timing] = key.split('_');
-        duplicates.push({
-          tableName,
-          event,
-          timing,
-          triggers: triggerList.map(t => t.triggerName),
-          count: triggerList.length
-        });
+        duplicates.push({ tableName, event, timing, triggers: triggerList.map(t => t.triggerName), count: triggerList.length });
       }
     }
-
     return duplicates;
   }
 
   logDuplicateTriggerWarnings(warnings) {
     for (const warning of warnings) {
       const envType = warning.type === 'source_duplicates' ? 'SOURCE' : 'DESTINATION';
-      logger.warn(`⚠️  DUPLICATE TRIGGERS FOUND in ${envType} environment:`);
-
-      for (const duplicate of warning.duplicates) {
-        logger.warn(`   Table: ${duplicate.tableName}`);
-        logger.warn(`   Event: ${duplicate.event} ${duplicate.timing}`);
-        logger.warn(`   Triggers (${duplicate.count}): ${duplicate.triggers.join(', ')}`);
-        logger.warn(`   ⚠️  Multiple triggers for same event may cause conflicts!`);
-        logger.warn('');
+      if (global.logger) {
+        global.logger.warn(`⚠️  DUPLICATE TRIGGERS FOUND in ${envType} environment:`);
+        for (const duplicate of warning.duplicates) {
+          global.logger.warn(`   Table: ${duplicate.tableName}`);
+          global.logger.warn(`   Event: ${duplicate.event} ${duplicate.timing}`);
+          global.logger.warn(`   Triggers (${duplicate.count}): ${duplicate.triggers.join(', ')}`);
+        }
       }
     }
   }
@@ -849,43 +761,18 @@ module.exports = class ComparatorService {
     const reportFolder = `${mapMigrateFolder}/triggers`;
     this.fileManager.makeSureFolderExisted(reportFolder);
     this.fileManager.saveToFile(reportFolder, 'trigger-changes.json', JSON.stringify(triggerChanges, null, 2));
-    logger.info('Trigger changes found:', triggerChanges.length);
   }
 
   async processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, destEnv) {
-    const newDDL = await this.markNewDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, destEnv);
-    if (newDDL) {
-      this.logNewDDLStats(newDDL, ddlType);
-    }
-    return newDDL;
-  }
-
-  logNewDDLStats(newDDL, ddlType) {
-    logger.info('New..........', Object.entries(newDDL)
-      .filter(([k]) => k.includes('_new'))
-      .reduce((total, [k, v]) => total + v, 0));
-
-    if (ddlType in [PROCEDURES, FUNCTIONS]) {
-      logger.info('OTE..........', Object.entries(newDDL)
-        .filter(([k]) => k.includes('_ote'))
-        .reduce((total, [k, v]) => total + v, 0));
-    }
+    return await this.markNewDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, destEnv);
   }
 
   async processUpdatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
-    const updatedDDL = await this.markChangeDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, srcEnv, destEnv);
-    if (updatedDDL) {
-      logger.info('Updated......', Object.values(updatedDDL).reduce((total, n) => total + n, 0));
-    }
-    return updatedDDL;
+    return await this.markChangeDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, srcEnv, destEnv);
   }
 
   async processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType) {
-    const deprecatedDDL = await this.markDeprecatedDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType);
-    if (deprecatedDDL) {
-      logger.info('Deprecated...', Object.values(deprecatedDDL).reduce((total, n) => total + n, 0));
-    }
-    return deprecatedDDL;
+    return await this.markDeprecatedDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType);
   }
 
   async generateReports(destEnv, allChanges) {
@@ -893,26 +780,22 @@ module.exports = class ComparatorService {
     await this.report2html(destEnv);
   }
 
-  async logDiff(srcColumnDef, destColumnDef) {
-    logger.info('S:', srcColumnDef);
-    logger.warn('D:', destColumnDef);
-    logger.info('Diff:');
-    const differences = diffWords(srcColumnDef, destColumnDef); // Use diffJson if objects
+  async logDiff(srcContent, destContent) {
+    if (global.logger) {
+      global.logger.info('S:', srcContent);
+      global.logger.warn('D:', destContent);
+    }
+    const differences = diffWords(srcContent, destContent);
     differences.forEach(part => {
       const color = part.added ? '\x1b[32m' : part.removed ? '\x1b[31m' : '\x1b[0m';
-      process.stdout.write(color + part.value + '\x1b[0m\n');
+      process.stdout.write(color + part.value + '\x1b[0m');
     });
+    process.stdout.write('\x1b[0m\n');
   }
 
-  /**
-   * Compare function that compares the specified DDL between environments
-   * 
-   * @param {string} ddl - The type of DDL to compare (e.g., TABLES, FUNCTIONS, PROCEDURES).
-   * @returns {Function} - An async function that takes an environment object and compares the DDL.
-   */
   compare(ddl) {
     return async (env) => {
-      logger.warn(`Start comparing ${ddl} changes for...`, env);
+      if (global.logger) global.logger.warn(`Start comparing ${ddl} changes for...`, env);
       const srcEnv = this.getSourceEnv(env);
       switch (ddl) {
         case FUNCTIONS:
@@ -929,7 +812,6 @@ module.exports = class ComparatorService {
           await this.reportTriggerChange(srcEnv, env);
           break;
         default:
-          // Note: report2console needs to be injected
           this.report2console(env);
           break;
       }

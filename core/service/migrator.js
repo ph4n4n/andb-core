@@ -41,7 +41,7 @@ module.exports = class MigratorService {
     for (const key in dependencies) {
       this[key] = dependencies[key];
     }
-    
+
     // Storage strategy (File/SQLite/Hybrid)
     this.storage = dependencies.storage || null;
   }
@@ -58,7 +58,7 @@ module.exports = class MigratorService {
     if (this.storage) {
       return await this.storage.getDDL(env, this.getDBName(env), type, name);
     }
-    
+
     // Fallback: FileManager
     const folder = `db/${env}/${this.getDBName(env)}/${type}`;
     return this.fileManager.readFromFile(folder, `${name}.sql`);
@@ -81,7 +81,7 @@ module.exports = class MigratorService {
         .filter(c => c.status === status)
         .map(c => c.name);
     }
-    
+
     // Fallback: FileManager
     const folder = `map-migrate/${srcEnv}-to-${destEnv}/${this.getDBName(srcEnv)}/${type}`;
     return this.fileManager.readFromFile(folder, listFile, 1);
@@ -118,10 +118,10 @@ module.exports = class MigratorService {
         for (const functionName of functionNames) {
           const fileName = `${functionName}.sql`;
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
-          
+
           // Read function DDL from storage or file
           const importQuery = await this.readDDL(srcEnv, FUNCTIONS, functionName);
-          
+
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
@@ -133,6 +133,19 @@ module.exports = class MigratorService {
             }
             await util.promisify(destConnection.query).call(destConnection, importQuery);
             logger.info('Created...', functionName, '\n');
+
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: FUNCTIONS,
+                name: functionName,
+                operation: fromList === DEPRECATED ? 'DROP' : 'CREATE',
+                status: 'SUCCESS'
+              });
+            }
             // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
             // copy to soft migrate
@@ -218,6 +231,19 @@ module.exports = class MigratorService {
 
             await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
             logger.info('Created...', procedureName, '\n');
+
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: PROCEDURES,
+                name: procedureName,
+                operation: fromList === DEPRECATED ? 'DROP' : 'CREATE',
+                status: 'SUCCESS'
+              });
+            }
             // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
             // copy to soft migrate
@@ -489,8 +515,20 @@ module.exports = class MigratorService {
             if (global.logger) global.logger.warn('Experimental Run::', { importQuery });
           } else {
             if (global.logger) global.logger.dev('Executing query:', importQuery);
-            await util.promisify(destConnection.query).call(destConnection, importQuery);
             if (global.logger) global.logger.info('Created...', tableName, '\n');
+
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: TABLES,
+                name: tableName,
+                operation: 'CREATE',
+                status: 'SUCCESS'
+              });
+            }
           }
           tablesMigrated++;
         }
@@ -542,7 +580,20 @@ module.exports = class MigratorService {
             logger.warn('::Experimental Run::', { alterQuery });
           } else {
             await util.promisify(destConnection.query).call(destConnection, alterQuery);
-            logger.info('Updated...', alterQuery);
+            if (global.logger) global.logger.info('Updated...', alterQuery);
+
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: TABLES,
+                name: tableName,
+                operation: 'ALTER',
+                status: 'SUCCESS'
+              });
+            }
             this.fileManager.removeFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
           }
           tablesAltered++;

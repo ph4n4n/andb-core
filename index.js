@@ -21,6 +21,9 @@ const MigratorService = require('./core/service/migrator')
 const MonitorService = require('./core/service/monitor')
 const Container = require('./core/service/container')
 
+// CLI Builder
+const { build: buildCLI } = require('./core/cli')
+
 module.exports = {
   utils,
   configs,
@@ -29,5 +32,6 @@ module.exports = {
   ComparatorService,
   MigratorService,
   MonitorService,
-  Container
+  Container,
+  buildCLI
 }
