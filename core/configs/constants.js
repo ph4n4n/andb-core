@@ -25,6 +25,7 @@ exports.DDL = {
   FUNCTIONS: 'functions',
   PROCEDURES: 'procedures',
   TRIGGERS: 'triggers',
+  VIEWS: 'views',
 };
 
 /**
@@ -43,8 +44,8 @@ exports.STATUSES = {
  * Used to normalize domain names across different environments
  */
 exports.DOMAIN_NORMALIZATION = {
-  // Default regex pattern (can be overridden in user config)
-  pattern: /@flo(dev\.net|uat\.net|stage\.com)/g,
-  // Default replacement value
-  replacement: '@flomail.net'
+  // Default: Match nothing (no-op)
+  // Override this in andb.yaml or andb.config.js
+  pattern: /(?!)/,
+  replacement: ''
 };

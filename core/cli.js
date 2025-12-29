@@ -19,7 +19,8 @@ module.exports = {
     replaceWithEnv,
     ENVIRONMENTS,
     baseDir,
-    logName
+    logName,
+    domainNormalization
   }) => {
     // init logger
     global.logger = require('andb-logger')
@@ -43,7 +44,8 @@ module.exports = {
       getDestEnv,
       getDBName,
       replaceWithEnv,
-      ENVIRONMENTS
+      ENVIRONMENTS,
+      domainNormalization
     });
     const { exporter, comparator, migrator, monitor } = container.getServices();
 
@@ -298,6 +300,13 @@ module.exports = {
 
 # Environments
 environments:
+
+# Domain Normalization (Optional)
+# Used to replace environment-specific domains in DDLs
+# normalization:
+#   pattern: "@flo(dev\\.net|uat\\.net|stage\\.com)"
+#   replacement: "@flomail.net"
+
 `;
 
         for (const env of environments) {

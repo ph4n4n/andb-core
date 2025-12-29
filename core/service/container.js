@@ -81,7 +81,8 @@ module.exports = class Container {
         report2html: reportHelper.report2html.bind(reportHelper),
         vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
         fileManager,
-        storage
+        storage,
+        domainNormalization: this.config.domainNormalization
       });
       return (ddl) => comparatorService.compare(ddl);
     });
