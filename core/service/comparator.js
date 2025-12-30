@@ -11,7 +11,7 @@
  */
 const path = require('path');
 const {
-  DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS },
+  DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS, VIEWS },
   DOMAIN_NORMALIZATION
 } = require('../configs/constants');
 const { diffWords } = require('diff');
@@ -386,7 +386,7 @@ module.exports = class ComparatorService {
     return this.generateAlterSQL(srcTableDefinition, destTableDefinition);
   }
 
-  async markNewDDL(reportDDLFolder, srcLines, destLines, ddlType, destEnv) {
+  async markNewDDL(reportDDLFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
     const newDDLFile = `new.list`;
     const newLines = srcLines
       .filter(line => !destLines.includes(line)).filter(Boolean);
@@ -396,9 +396,9 @@ module.exports = class ComparatorService {
       if (newLines.length > 0) {
         for (const ddlName of newLines) {
           await this.storage.saveComparison({
-            srcEnv: this.getSourceEnv(destEnv),
+            srcEnv,
             destEnv,
-            database: this.getDBName(this.getSourceEnv(destEnv)),
+            database: this.getDBName(srcEnv),
             type: ddlType,
             name: ddlName,
             status: 'new'
@@ -442,7 +442,7 @@ module.exports = class ComparatorService {
     return { [`${ddlType}_new`]: newLines.length };
   }
 
-  async markDeprecatedDDL(reportDDLFolder, srcLines, destLines, ddlType) {
+  async markDeprecatedDDL(reportDDLFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
     const deprecatedDDLFile = `deprecated.list`;
     const deprecatedLines = destLines.filter(
       line => !srcLines.includes(line)
@@ -453,9 +453,9 @@ module.exports = class ComparatorService {
       if (deprecatedLines.length > 0) {
         for (const ddlName of deprecatedLines) {
           await this.storage.saveComparison({
-            srcEnv: this.getSourceEnv(),
-            destEnv: this.getDestEnv(),
-            database: this.getDBName(this.getSourceEnv()),
+            srcEnv,
+            destEnv,
+            database: this.getDBName(srcEnv),
             type: ddlType,
             name: ddlName,
             status: 'deprecated'
@@ -482,10 +482,13 @@ module.exports = class ComparatorService {
 
     // Filter changed DDLs
     const updatedLines = [];
+    const equalLines = [];
     const checkChanged = this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv);
     for (const ddlName of existedDDL) {
       if (await checkChanged(ddlName)) {
         updatedLines.push(ddlName);
+      } else {
+        equalLines.push(ddlName);
       }
     }
 
@@ -506,7 +509,25 @@ module.exports = class ComparatorService {
           await this.generateTableAlterFiles(updatedLines, srcEnv, destEnv, reportDDLFolder);
         }
       }
-      return { [`${ddlType}_updated`]: updatedLines.length };
+
+      // NEW: Save equal objects to storage so UI can show them
+      if (equalLines.length > 0) {
+        for (const ddlName of equalLines) {
+          await this.storage.saveComparison({
+            srcEnv,
+            destEnv,
+            database: this.getDBName(srcEnv),
+            type: ddlType,
+            name: ddlName,
+            status: 'equal'
+          });
+        }
+      }
+
+      return {
+        [`${ddlType}_updated`]: updatedLines.length,
+        [`${ddlType}_equal`]: equalLines.length
+      };
     }
 
     // Fallback: FileManager
@@ -599,21 +620,23 @@ module.exports = class ComparatorService {
         await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder);
       }
 
-      const newDDL = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, destEnv);
+      const newDDL = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv);
       const updatedDDL = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv);
-      const deprecatedDDL = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType);
+      const deprecatedDDL = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv);
 
       // Log detailed comparison results
       if (global.logger) {
         const newCount = newDDL[`${ddlType}_new`] || 0;
         const updatedCount = updatedDDL[`${ddlType}_updated`] || 0;
         const deprecatedCount = deprecatedDDL[`${ddlType}_deprecated`] || 0;
+        const equalCount = updatedDDL[`${ddlType}_equal`] || 0;
         const totalChanges = newCount + updatedCount + deprecatedCount;
 
         global.logger.info(`\n📊 Comparison Results for ${ddlType}:`);
         global.logger.info(`  ✨ New: ${newCount}`);
         global.logger.info(`  🔄 Updated: ${updatedCount}`);
         global.logger.info(`  ⚠️  Deprecated: ${deprecatedCount}`);
+        global.logger.info(`  ✅ Equal: ${equalCount}`);
         global.logger.info(`  📈 Total changes: ${totalChanges}`);
 
         if (totalChanges === 0) {
@@ -763,16 +786,16 @@ module.exports = class ComparatorService {
     this.fileManager.saveToFile(reportFolder, 'trigger-changes.json', JSON.stringify(triggerChanges, null, 2));
   }
 
-  async processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, destEnv) {
-    return await this.markNewDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, destEnv);
+  async processNewDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
+    return await this.markNewDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, srcEnv, destEnv);
   }
 
   async processUpdatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
     return await this.markChangeDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, srcEnv, destEnv);
   }
 
-  async processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType) {
-    return await this.markDeprecatedDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType);
+  async processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, ddlType, srcEnv, destEnv) {
+    return await this.markDeprecatedDDL(`${mapMigrateFolder}/${ddlType}`, srcLines, destLines, ddlType, srcEnv, destEnv);
   }
 
   async generateReports(destEnv, allChanges) {
@@ -805,8 +828,11 @@ module.exports = class ComparatorService {
           await this.reportDLLChange(srcEnv, PROCEDURES, env);
           break;
         case TABLES:
-          await this.reportDLLChange(srcEnv, TABLES, env);
           await this.reportTableStructureChange(env);
+          await this.reportDLLChange(srcEnv, TABLES, env);
+          break;
+        case VIEWS:
+          await this.reportDLLChange(srcEnv, VIEWS, env);
           break;
         case TRIGGERS:
           await this.reportTriggerChange(srcEnv, env);

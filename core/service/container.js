@@ -59,11 +59,9 @@ module.exports = class Container {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
       const storage = container.get(STORAGE);
+      const migratorService = new MigratorService({ ...dbUtilFn, fileManager, storage });
 
-      return (ddl, status) => {
-        const migratorService = new MigratorService({ ...dbUtilFn, fileManager, storage });
-        return migratorService.migrate(ddl, status);
-      };
+      return (ddl, status, name = null) => migratorService.migrate(ddl, status, name);
     });
     return this;
   }

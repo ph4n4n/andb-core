@@ -11,7 +11,7 @@
  */
 const mysql = require("mysql2");
 const {
-  DDL: { TRIGGERS, TABLES, PROCEDURES, FUNCTIONS }
+  DDL: { TRIGGERS, TABLES, VIEWS, PROCEDURES, FUNCTIONS }
 } = require("../configs/constants");
 // Remove direct import of file helper
 // const {
@@ -69,11 +69,12 @@ module.exports = class ExporterService {
       const triggerQuery = "SHOW TRIGGERS";
       connection.query(triggerQuery, async (err, triggerResults) => {
         if (err) {
-          logger.error("Error retrieving triggers: ", err);
+          if (global.logger) global.logger.error("Error retrieving triggers: ", err);
           connection.end();
           reject(err);
           return;
         }
+        if (global.logger) global.logger.info(`Found ${triggerResults.length} triggers to export`);
         // Append the number of triggers to the report
         await this.appendReport(dbConfig.envName, {
           triggers_total: triggerResults.length,
@@ -95,7 +96,7 @@ module.exports = class ExporterService {
 
             this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
           } catch (error) {
-            logger.error(`Error exporting trigger ${triggerName}:`, error);
+            if (global.logger) global.logger.error(`Error exporting trigger ${triggerName}:`, error);
           }
         }
         return resolve(triggerResults.length);
@@ -117,16 +118,22 @@ module.exports = class ExporterService {
       const dbPath = `db/${dbConfig.envName}/${self.getDBName(dbConfig.envName)}`;
       const ddlFolderPath = self.makeDDLFolderReady(dbPath, FUNCTIONS);
       // Query the database for function information
-      const functionQuery = "SHOW FUNCTION STATUS WHERE Db = ?";
+      const functionQuery = "SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?)";
       connection.query(
         functionQuery,
         [dbConfig.database],
         async function (err, functionResults) {
           if (err) {
-            logger.error("Error retrieving functions: ", err);
+            if (global.logger) global.logger.error("Error retrieving functions: ", err);
             connection.end();
             reject(err);
             return;
+          }
+          if (global.logger) {
+            global.logger.info(`Found ${functionResults.length} functions to export in ${dbConfig.envName}`);
+            if (functionResults.length > 0) {
+              global.logger.info(`Row keys: ${Object.keys(functionResults[0]).join(', ')}`);
+            }
           }
           //
           await self.appendReport(dbConfig.envName, {
@@ -136,10 +143,9 @@ module.exports = class ExporterService {
           // NEW: Collect exported data
           const exportedData = [];
 
-          // Export functions to separate files
           for (const row of functionResults) {
-            const fnName = row.Name;
-            const query = `SHOW CREATE FUNCTION ${fnName}`;
+            const fnName = row.Name || row.name || Object.values(row)[1]; // Usually 2nd col is Name
+            const query = `SHOW CREATE FUNCTION \`${fnName}\``;
 
             try {
               const result = await util
@@ -211,16 +217,22 @@ module.exports = class ExporterService {
       const ddlFolderPath = this.makeDDLFolderReady(dbPath, PROCEDURES);
 
       // Query the database for procedure information
-      const procedureQuery = "SHOW PROCEDURE STATUS WHERE Db = ?";
+      const procedureQuery = "SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?)";
       connection.query(
         procedureQuery,
         [dbConfig.database],
         async (err, procedureResults) => {
           if (err) {
-            logger.error("Error retrieving procedures: ", err);
+            if (global.logger) global.logger.error("Error retrieving procedures: ", err);
             connection.end();
             reject(err);
             return;
+          }
+          if (global.logger) {
+            global.logger.info(`Found ${procedureResults.length} procedures to export in ${dbConfig.envName}`);
+            if (procedureResults.length > 0) {
+              global.logger.info(`Row keys: ${Object.keys(procedureResults[0]).join(', ')}`);
+            }
           }
 
           // Append the number of procedures to the report
@@ -231,10 +243,9 @@ module.exports = class ExporterService {
           // NEW: Collect exported data
           const exportedData = [];
 
-          // Export procedures to separate files
           for (const row of procedureResults) {
-            const spName = row.Name;
-            const query = `SHOW CREATE PROCEDURE ${spName}`;
+            const spName = row.Name || row.name || Object.values(row)[1];
+            const query = `SHOW CREATE PROCEDURE \`${spName}\``;
 
             try {
               const result = await util
@@ -297,6 +308,53 @@ module.exports = class ExporterService {
    * @param {*} connection
    * @returns
    */
+  async exportViews(connection, dbConfig) {
+    return new Promise((resolve, reject) => {
+      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+      const ddlFolderPath = this.makeDDLFolderReady(dbPath, 'views');
+      const viewQuery = "SHOW FULL TABLES WHERE Table_type = 'VIEW'";
+
+      connection.query(viewQuery, async (err, viewResults) => {
+        if (err) {
+          if (global.logger) global.logger.error("Error retrieving views: ", err);
+          connection.end();
+          reject(err);
+          return;
+        }
+
+        try {
+          await this.appendReport(dbConfig.envName, { views_total: viewResults.length });
+          const exportedData = [];
+
+          for (const row of viewResults) {
+            const viewName = Object.values(row)[0];
+            const query = `SHOW CREATE VIEW \`${viewName}\``;
+
+            try {
+              const result = await util.promisify(connection.query).call(connection, query);
+              const createStatement = result[0]["Create View"];
+              const cleanStatement = this.convertKeywordsToUppercase(createStatement);
+
+              this.appendDDL(dbConfig.envName, ddlFolderPath, 'views', viewName, cleanStatement);
+              exportedData.push({ name: viewName, ddl: cleanStatement });
+            } catch (viewError) {
+              if (global.logger) global.logger.error(`Error exporting view ${viewName}:`, viewError);
+            }
+          }
+
+          if (this.storage) {
+            await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), 'views', exportedData);
+          }
+
+          return resolve({ count: viewResults.length, data: exportedData });
+        } catch (error) {
+          if (global.logger) global.logger.error("Error in exportViews:", error);
+          return reject(error);
+        }
+      });
+    });
+  }
+
   async exportTables(connection, dbConfig) {
     return new Promise((resolve, reject) => {
       const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
@@ -305,14 +363,12 @@ module.exports = class ExporterService {
 
       connection.query(tableQuery, async (err, tableResults) => {
         if (err) {
-          if (global.logger) {
-            global.logger.error("Error retrieving tables: ", err);
-          }
+          if (global.logger) global.logger.error("Error retrieving tables: ", err);
           connection.end();
           reject(err);
           return;
         }
-
+        if (global.logger) global.logger.info(`Found ${tableResults.length} tables to export in ${dbConfig.envName}`);
         try {
           //
           await this.appendReport(dbConfig.envName, {
@@ -527,6 +583,9 @@ module.exports = class ExporterService {
             switch (ddl) {
               case TABLES:
                 result = await this.exportTables(connection, dbConfig);
+                break;
+              case VIEWS:
+                result = await this.exportViews(connection, dbConfig);
                 break;
               case FUNCTIONS:
                 result = await this.exportFunctions(connection, dbConfig);

@@ -95,19 +95,19 @@ module.exports = class MigratorService {
    * @param {string} fromList - The list of functions to migrate.
    * @returns {number} - The number of functions migrated.
    */
-  async migrateFunctions(destConnection, dbConfig, fromList = NEW) {
+  async migrateFunctions(destConnection, dbConfig, fromList = NEW, functionName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${FUNCTIONS}`;
     const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${FUNCTIONS}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
     try {
-      // Read function list from storage or file
-      const functionNames = await this.readComparisonList(srcEnv, dbConfig.envName, FUNCTIONS, `${fromList}.list`);
+      // Use functionName if provided, otherwise read from storage or file
+      const functionNames = functionName ? [functionName] : await this.readComparisonList(srcEnv, dbConfig.envName, FUNCTIONS, `${fromList}.list`);
 
       // Check if there are functions to migrate
       if (!functionNames.length) {
-        logger.dev(`No FUNCTION to migrate to ${dbConfig.envName}`);
+        if (!functionName) logger.dev(`No FUNCTION to migrate to ${dbConfig.envName}`);
         return 0;
       }
       if (+process.env.EXPERIMENTAL < 1) {
@@ -152,8 +152,8 @@ module.exports = class MigratorService {
             this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
           }
         }
-        // clean after migrated done (only for file-based storage)
-        if (!this.storage) {
+        // clean after migrated done (only for file-based storage and not single migration)
+        if (!this.storage && !functionName) {
           const fnFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
           const fnList = `${fromList}.list`;
           this.fileManager.saveToFile(fnFolder, fnList, '');
@@ -190,9 +190,10 @@ module.exports = class MigratorService {
    * @param {*} destConnection The destination database connection. 
    * @param {*} dbConfig The configuration for the databases.
    * @param {*} fromList The list of procedures to migrate. 
+   * @param {string} [name=null] - Specific procedure name to migrate. If provided, skips list file.
    * @returns The number of procedures migrated. 
    */
-  async migrateProcedures(destConnection, dbConfig, fromList = NEW) {
+  async migrateProcedures(destConnection, dbConfig, fromList = NEW, procedureName = null) {
     // Get the source environment and folders
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
@@ -202,10 +203,11 @@ module.exports = class MigratorService {
     try {
       const spFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
       const spList = `${fromList}.list`;
-      const procedureNames = this.fileManager.readFromFile(spFolder, spList, 1)
+      const procedureNames = procedureName ? [procedureName] : await this.readComparisonList(srcEnv, dbConfig.envName, PROCEDURES, spList);
+
       // Check if there are procedures to migrate
       if (!procedureNames?.length) {
-        logger.dev(`No PROCEDURE to migrate to ${dbConfig.envName}`);
+        if (!procedureName) logger.dev(`No PROCEDURE to migrate to ${dbConfig.envName}`);
         return 0;
       }
       // Start a transaction if experimental flag is not set
@@ -217,7 +219,7 @@ module.exports = class MigratorService {
         for (const procedureName of procedureNames) {
           const fileName = `${procedureName}.sql`;
           const dropQuery = `DROP PROCEDURE IF EXISTS \`${procedureName}\`;`;
-          const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
+          const importQuery = await this.readDDL(srcEnv, PROCEDURES, procedureName);
 
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
@@ -250,8 +252,10 @@ module.exports = class MigratorService {
             this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
           }
         }
-        // Clean up the procedure list after migration
-        this.fileManager.saveToFile(spFolder, spList, '');
+        // Clean up the procedure list after migration (only if not single migration)
+        if (!procedureName) {
+          this.fileManager.saveToFile(spFolder, spList, '');
+        }
         // Commit the transaction if all queries are successful
         if (+process.env.EXPERIMENTAL < 1) {
           await util.promisify(destConnection.commit).call(destConnection);
@@ -270,8 +274,16 @@ module.exports = class MigratorService {
       return 0;
     }
   }
-  // complete this function  like migrateProcedures and migrateFunctions
-  async migrateTriggers(destConnection, dbConfig, fromList = NEW) {
+  /**
+   * Migrates triggers from one database to another.
+   * 
+   * @param {*} destConnection The destination database connection. 
+   * @param {*} dbConfig The configuration for the databases.
+   * @param {*} fromList The list of triggers to migrate. 
+   * @param {string} [name=null] - Specific trigger name to migrate. If provided, skips list file.
+   * @returns The number of triggers migrated. 
+   */
+  async migrateTriggers(destConnection, dbConfig, fromList = NEW, triggerName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${TRIGGERS}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${TRIGGERS}`;
@@ -280,9 +292,9 @@ module.exports = class MigratorService {
     try {
       const triggerFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${TRIGGERS}`;
       const triggerList = `${fromList}.list`;
-      const triggerNames = this.fileManager.readFromFile(triggerFolder, triggerList, 1);
+      const triggerNames = triggerName ? [triggerName] : await this.readComparisonList(srcEnv, dbConfig.envName, TRIGGERS, triggerList);
       if (!triggerNames?.length) {
-        logger.dev(`No TRIGGER to migrate to ${dbConfig.envName}`);
+        if (!triggerName) logger.dev(`No TRIGGER to migrate to ${dbConfig.envName}`);
         return 0;
       }
       if (+process.env.EXPERIMENTAL < 1) {
@@ -292,7 +304,7 @@ module.exports = class MigratorService {
         for (const triggerName of triggerNames) {
           const fileName = `${triggerName}.sql`;
           const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
-          const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
+          const importQuery = await this.readDDL(srcEnv, TRIGGERS, triggerName);
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
@@ -300,14 +312,36 @@ module.exports = class MigratorService {
             logger.warn('Dropped...', triggerName);
             await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
             logger.info('Created...', triggerName, '\n');
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: TRIGGERS,
+                name: triggerName,
+                operation: fromList === DEPRECATED ? 'DROP' : 'CREATE',
+                status: 'SUCCESS'
+              });
+            }
             // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
             // copy to soft migrate
             this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
           }
         }
+        // Clean up the trigger list after migration (only if not single migration)
+        if (!triggerName) {
+          this.fileManager.saveToFile(triggerFolder, triggerList, '');
+        }
+        if (+process.env.EXPERIMENTAL < 1) {
+          // Commit the transaction if all queries are successful
+          await util.promisify(destConnection.commit).call(destConnection);
+        }
+        return triggerNames?.length;
       } catch (err) {
         if (+process.env.EXPERIMENTAL < 1) {
+          // Rollback the transaction in case of an error
           await util.promisify(destConnection.rollback).call(destConnection);
         }
         logger.error(`Error during migration: `, err);
@@ -324,16 +358,18 @@ module.exports = class MigratorService {
    * 
    * @param {object} destConnection - The destination database connection.
    * @param {object} dbConfig - The database configuration.
+   * @param {string} [fnList='deprecated.list'] - The list file name for deprecated functions.
+   * @param {string} [name=null] - Specific function name to deprecate. If provided, skips list file.
    * @returns {number} - The number of functions migrated.
    */
-  async deprecateFunctions(destConnection, dbConfig, fnList = 'deprecated.list') {
+  async deprecateFunctions(destConnection, dbConfig, fnList = 'deprecated.list', functionName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
+    const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${FUNCTIONS}`;
     try {
       const fnFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
-      const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${FUNCTIONS}`;
-      const functionNames = this.fileManager.readFromFile(fnFolder, fnList, 1);
+      const functionNames = functionName ? [functionName] : await this.readComparisonList(srcEnv, dbConfig.envName, FUNCTIONS, fnList);
       if (!functionNames.length) {
-        logger.dev(`No FUNCTION to deprecated to ${dbConfig.envName}`);
+        if (!functionName) logger.dev(`No FUNCTION to deprecated to ${dbConfig.envName}`);
         return 0;
       }
       if (+process.env.EXPERIMENTAL < 1) {
@@ -348,13 +384,27 @@ module.exports = class MigratorService {
           } else {
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
             logger.warn('Dropped...', functionName);
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: FUNCTIONS,
+                name: functionName,
+                operation: 'DROP',
+                status: 'SUCCESS'
+              });
+            }
             // soft delete
             this.fileManager.removeFile(destFolder, `${functionName}.sql`);
           }
         }
         if (+process.env.EXPERIMENTAL < 1) {
-          // clean after migrated done
-          this.fileManager.saveToFile(fnFolder, fnList, '');
+          // clean after migrated done (not for single migration)
+          if (!functionName) {
+            this.fileManager.saveToFile(fnFolder, fnList, '');
+          }
           // Commit the transaction if all queries are successful
           await util.promisify(destConnection.commit).call(destConnection);
         }
@@ -378,20 +428,22 @@ module.exports = class MigratorService {
    * 
    * @param {*} destConnection The destination database connection. 
    * @param {*} dbConfig The configuration for the databases.
+   * @param {string} [spList='deprecated.list'] - The list file name for deprecated procedures.
+   * @param {string} [name=null] - Specific procedure name to deprecate. If provided, skips list file.
    * @returns The number of procedures migrated. 
    */
-  async deprecateProcedures(destConnection, dbConfig, spList = 'deprecated.list') {
+  async deprecateProcedures(destConnection, dbConfig, spList = 'deprecated.list', procedureName = null) {
     // Get the source environment and folders
     const srcEnv = this.getSourceEnv(dbConfig.envName);
-    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${PROCEDURES}`;
+    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
     try {
       const spFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
       const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
-      const procedureNames = this.fileManager.readFromFile(spFolder, spList, 1);
+      const procedureNames = procedureName ? [procedureName] : await this.readComparisonList(srcEnv, dbConfig.envName, PROCEDURES, spList);
       // Check if there are procedures to migrate
       if (!procedureNames?.length) {
-        logger.dev(`No PROCEDURE to deprecated to ${dbConfig.envName}`);
+        if (!procedureName) logger.dev(`No PROCEDURE to deprecated to ${dbConfig.envName}`);
         return 0;
       }
       // Start a transaction if experimental flag is not set
@@ -409,14 +461,28 @@ module.exports = class MigratorService {
             // Drop the procedure, import the new one, and create a backup
             logger.warn('Dropped...', procedureName);
             await util.promisify(destConnection.query).call(destConnection, dropQuery);
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: PROCEDURES,
+                name: procedureName,
+                operation: 'DROP',
+                status: 'SUCCESS'
+              });
+            }
             // soft delete
             this.fileManager.removeFile(destFolder, `${procedureName}.sql`);
           }
         }
         // Commit the transaction if all queries are successful
         if (+process.env.EXPERIMENTAL < 1) {
-          // Clean up the procedure list after migration
-          this.fileManager.saveToFile(spFolder, spList, '');
+          // Clean up the procedure list after migration (not for single migration)
+          if (!procedureName) {
+            this.fileManager.saveToFile(spFolder, spList, '');
+          }
           await util.promisify(destConnection.commit).call(destConnection);
         }
         return procedureNames?.length;
@@ -437,15 +503,17 @@ module.exports = class MigratorService {
    * Remove deprecated triggers from destination db.
    * @param {*} destConnection 
    * @param {*} dbConfig 
-   * @param {*} triggerList 
+   * @param {string} [triggerList='deprecated.list'] - The list file name for deprecated triggers.
+   * @param {string} [name=null] - Specific trigger name to deprecate. If provided, skips list file.
    * @returns 
    */
-  async deprecateTriggers(destConnection, dbConfig, triggerList = 'deprecated.list') {
+  async deprecateTriggers(destConnection, dbConfig, triggerList = 'deprecated.list', triggerName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
+    const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${TRIGGERS}`;
     const triggerFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${TRIGGERS}`;
-    const triggerNames = this.fileManager.readFromFile(triggerFolder, triggerList, 1);
+    const triggerNames = triggerName ? [triggerName] : await this.readComparisonList(srcEnv, dbConfig.envName, TRIGGERS, triggerList);
     if (!triggerNames?.length) {
-      logger.dev(`No TRIGGER to deprecated to ${dbConfig.envName}`);
+      if (!triggerName) logger.dev(`No TRIGGER to deprecated to ${dbConfig.envName}`);
       return 0;
     }
     if (+process.env.EXPERIMENTAL < 1) {
@@ -459,11 +527,36 @@ module.exports = class MigratorService {
         } else {
           await util.promisify(destConnection.query).call(destConnection, dropQuery);
           logger.warn('Dropped...', triggerName);
+          // Log to storage
+          if (this.storage) {
+            await this.storage.saveMigration({
+              srcEnv,
+              destEnv: dbConfig.envName,
+              database: this.getDBName(srcEnv),
+              type: TRIGGERS,
+              name: triggerName,
+              operation: 'DROP',
+              status: 'SUCCESS'
+            });
+          }
           // soft delete
-          this.fileManager.removeFile(triggerFolder, `${triggerName}.sql`);
+          this.fileManager.removeFile(destFolder, `${triggerName}.sql`);
         }
       }
+      // Clean up the trigger list after migration (only if not single migration)
+      if (!triggerName) {
+        this.fileManager.saveToFile(triggerFolder, triggerList, '');
+      }
+      if (+process.env.EXPERIMENTAL < 1) {
+        // Commit the transaction if all queries are successful
+        await util.promisify(destConnection.commit).call(destConnection);
+      }
+      return triggerNames?.length;
     } catch (err) {
+      if (+process.env.EXPERIMENTAL < 1) {
+        // Rollback the transaction in case of an error
+        await util.promisify(destConnection.rollback).call(destConnection);
+      }
       logger.error('Error reading triggers-migrate.list: ', err);
       return 0;
     }
@@ -481,15 +574,23 @@ module.exports = class MigratorService {
     }
   }
 
-  async migrateTables(destConnection, dbConfig) {
+  /**
+   * Migrates tables from one database to another.
+   * 
+   * @param {*} destConnection The destination database connection. 
+   * @param {*} dbConfig The configuration for the databases.
+   * @param {string} [name=null] - Specific table name to migrate. If provided, skips list file.
+   * @returns The number of tables migrated. 
+   */
+  async migrateTables(destConnection, dbConfig, tableName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${TABLES}`;
     try {
       const tblFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${TABLES}`
       const tblList = `${NEW}.list`;
-      const tableNames = this.fileManager.readFromFile(tblFolder, tblList, 1);
+      const tableNames = tableName ? [tableName] : await this.readComparisonList(srcEnv, dbConfig.envName, TABLES, tblList);
       if (!tableNames?.length) {
-        logger.dev(`No TABLE to migrate to ${dbConfig.envName}`);
+        if (!tableName) logger.dev(`No TABLE to migrate to ${dbConfig.envName}`);
         return 0;
       }
       let tablesMigrated = 0;
@@ -509,11 +610,12 @@ module.exports = class MigratorService {
             continue;
           }
 
-          const importQuery = this.fileManager.readFromFile(srcFolder, fileName);
+          const importQuery = await this.readDDL(srcEnv, TABLES, tableName);
 
           if (+process.env.EXPERIMENTAL === 1) {
             if (global.logger) global.logger.warn('Experimental Run::', { importQuery });
           } else {
+            await util.promisify(destConnection.query).call(destConnection, importQuery);
             if (global.logger) global.logger.dev('Executing query:', importQuery);
             if (global.logger) global.logger.info('Created...', tableName, '\n');
 
@@ -532,8 +634,10 @@ module.exports = class MigratorService {
           }
           tablesMigrated++;
         }
-        // clean after migrated done
-        this.fileManager.saveToFile(tblFolder, tblList, '');
+        // clean after migrated done (not for single migration)
+        if (!tableName) {
+          this.fileManager.saveToFile(tblFolder, tblList, '');
+        }
         if (+process.env.EXPERIMENTAL < 1) {
           // Commit the transaction if all queries are successful
           await util.promisify(destConnection.commit).call(destConnection);
@@ -553,14 +657,23 @@ module.exports = class MigratorService {
     }
   }
 
-  async alterTableColumns(destConnection, dbConfig, alterType = 'columns') {
+  /**
+   * Alters table columns or indexes.
+   * 
+   * @param {*} destConnection The destination database connection. 
+   * @param {*} dbConfig The configuration for the databases.
+   * @param {string} [alterType='columns'] - Type of alteration ('columns' or 'indexes').
+   * @param {string} [name=null] - Specific table name to alter. If provided, skips list file.
+   * @returns The number of tables altered. 
+   */
+  async alterTableColumns(destConnection, dbConfig, alterType = 'columns', tableName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const tableMap = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/tables`;
     try {
-      const tableNames = this.fileManager.readFromFile(tableMap, `alter-${alterType}.list`, 1);
+      const tableNames = tableName ? [tableName] : await this.readComparisonList(srcEnv, dbConfig.envName, TABLES, `alter-${alterType}.list`);
 
       if (!tableNames?.length) {
-        logger.dev(`No TABLE to alter for ${dbConfig.envName}`);
+        if (!tableName) logger.dev(`No TABLE to alter for ${dbConfig.envName}`);
         return 0;
       }
       let tablesAltered = 0;
@@ -598,7 +711,9 @@ module.exports = class MigratorService {
           }
           tablesAltered++;
         }
-        this.fileManager.saveToFile(tableMap, `alter-${alterType}.list`, '');
+        if (!tableName) {
+          this.fileManager.saveToFile(tableMap, `alter-${alterType}.list`, '');
+        }
 
         if (+process.env.EXPERIMENTAL < 1) {
           // Commit the transaction if all queries are successful
@@ -713,9 +828,9 @@ module.exports = class MigratorService {
   }
 
 
-  migrate(ddl, fromList) {
-    return (env) => {
-      logger.warn(`Start migrating ${fromList} ${ddl} changes for...`, env);
+  migrate(ddl, fromList, specificName = null) {
+    return async (env) => {
+      logger.warn(`Start migrating ${fromList} ${ddl} ${specificName ? specificName : 'changes'} for...`, env);
       const start = Date.now();
       const dbConfig = this.getDBDestination(env);
       const destConnection = mysql.createConnection({
@@ -725,54 +840,63 @@ module.exports = class MigratorService {
         password: dbConfig.password,
         port: dbConfig.port
       });
-      destConnection.connect(err => {
-        if (err) {
-          if (global.logger) global.logger.error('Error connecting to the database: ', err);
-          throw new Error(`Database connection failed: ${err.message}`);
+
+      const connect = util.promisify(destConnection.connect).bind(destConnection);
+      const end = util.promisify(destConnection.end).bind(destConnection);
+
+      try {
+        await connect();
+
+        let rs = 0;
+        let alterRs = 0;
+
+        switch (ddl) {
+          case FUNCTIONS:
+            if (fromList === DEPRECATED) {
+              rs = await this.deprecateFunctions(destConnection, dbConfig, 'deprecated.list', specificName);
+            } else if (fromList === OTE) {
+              rs = await this.deprecateFunctions(destConnection, dbConfig, 'OTE.list', specificName);
+            } else {
+              rs = await this.migrateFunctions(destConnection, dbConfig, fromList, specificName);
+            }
+            break;
+          case PROCEDURES:
+            if (fromList === DEPRECATED) {
+              rs = await this.deprecateProcedures(destConnection, dbConfig, 'deprecated.list', specificName);
+            } else if (fromList === OTE) {
+              rs = await this.deprecateProcedures(destConnection, dbConfig, 'OTE.list', specificName);
+            } else {
+              rs = await this.migrateProcedures(destConnection, dbConfig, fromList, specificName);
+            }
+            break;
+          case TABLES:
+            if (fromList === NEW) {
+              rs = await this.migrateTables(destConnection, dbConfig, specificName);
+            } else if (fromList === UPDATED) {
+              alterRs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
+              alterRs += await this.alterTableColumns(destConnection, dbConfig, 'indexes', specificName);
+            }
+            logger.dev(`Alter ${alterRs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
+            break;
+          case TRIGGERS:
+            if (fromList === DEPRECATED) {
+              rs = await this.deprecateTriggers(destConnection, dbConfig, 'deprecated.list', specificName);
+            } else {
+              rs = await this.migrateTriggers(destConnection, dbConfig, fromList, specificName);
+            }
+            break;
         }
-        (async () => {
-          let rs = 0;
-          let alterRs = 0;
-          switch (ddl) {
-            case FUNCTIONS:
-              if (fromList === DEPRECATED) {
-                rs = await this.deprecateFunctions(destConnection, dbConfig);
-              } else if (fromList === OTE) {
-                rs = await this.deprecateFunctions(destConnection, dbConfig, 'OTE.list');
-              } else {
-                rs = await this.migrateFunctions(destConnection, dbConfig, fromList);
-              }
-              break;
-            case PROCEDURES:
-              if (fromList === DEPRECATED) {
-                rs = await this.deprecateProcedures(destConnection, dbConfig);
-              } else if (fromList === OTE) {
-                rs = await this.deprecateProcedures(destConnection, dbConfig, 'OTE.list');
-              } else {
-                rs = await this.migrateProcedures(destConnection, dbConfig, fromList);
-              }
-              break;
-            case TABLES:
-              if (fromList === NEW) {
-                rs = await this.migrateTables(destConnection, dbConfig);
-              } else if (fromList === UPDATED) {
-                alterRs = await this.alterTableColumns(destConnection, dbConfig);
-                alterRs += await this.alterTableColumns(destConnection, dbConfig, 'indexes');
-              }
-              logger.dev(`Alter ${alterRs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
-              break;
-            case TRIGGERS:
-              if (fromList === DEPRECATED) {
-                rs = await this.deprecateTriggers(destConnection, dbConfig);
-              } else {
-                rs = await this.migrateTriggers(destConnection, dbConfig, fromList);
-              }
-              break;
-          }
-          destConnection.end();
-          logger.dev(`Migrate ${rs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
-        })();
-      });
+
+        await end();
+        logger.dev(`Migrate ${rs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
+        return rs + alterRs;
+      } catch (err) {
+        if (global.logger) global.logger.error('Error during migration: ', err);
+        try { destConnection.end(); } catch (e) { }
+        throw err;
+      }
     };
   }
+
+  // Removed migrateSingleItem to rely on existing code with enhanced params
 }
