@@ -103,7 +103,7 @@ module.exports = class Container {
         storage,
         config: this.config
       });
-      return (ddl) => exporterService.export(ddl);
+      return (ddl, name = null) => exporterService.export(ddl, name);
     });
     return this;
   }

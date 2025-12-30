@@ -101,40 +101,39 @@ module.exports = class MigratorService {
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${FUNCTIONS}`;
     const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${FUNCTIONS}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
+
     try {
-      // Use functionName if provided, otherwise read from storage or file
       const functionNames = functionName ? [functionName] : await this.readComparisonList(srcEnv, dbConfig.envName, FUNCTIONS, `${fromList}.list`);
 
-      // Check if there are functions to migrate
       if (!functionNames.length) {
         if (!functionName) logger.dev(`No FUNCTION to migrate to ${dbConfig.envName}`);
         return 0;
       }
+
+      const promiseConn = destConnection.promise();
+
       if (+process.env.EXPERIMENTAL < 1) {
-        // Start a transaction
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
+
       try {
         for (const functionName of functionNames) {
           const fileName = `${functionName}.sql`;
           const dropQuery = `DROP FUNCTION IF EXISTS \`${functionName}\`;`;
-
-          // Read function DDL from storage or file
           const importQuery = await this.readDDL(srcEnv, FUNCTIONS, functionName);
 
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
-            await util.promisify(destConnection.query).call(destConnection, dropQuery);
+            await promiseConn.query(dropQuery);
             logger.warn('Dropped...', functionName);
 
             if (this.isNotMigrateCondition(functionName)) {
               continue;
             }
-            await util.promisify(destConnection.query).call(destConnection, importQuery);
+            await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
             logger.info('Created...', functionName, '\n');
 
-            // Log to storage
             if (this.storage) {
               await this.storage.saveMigration({
                 srcEnv,
@@ -146,34 +145,31 @@ module.exports = class MigratorService {
                 status: 'SUCCESS'
               });
             }
-            // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
-            // copy to soft migrate
             this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
           }
         }
-        // clean after migrated done (only for file-based storage and not single migration)
+
         if (!this.storage && !functionName) {
           const fnFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
           const fnList = `${fromList}.list`;
           this.fileManager.saveToFile(fnFolder, fnList, '');
         }
+
         if (+process.env.EXPERIMENTAL < 1) {
-          // Commit the transaction if all queries are successful
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
-        return functionNames?.length;
+        return functionNames.length;
       } catch (err) {
         if (+process.env.EXPERIMENTAL < 1) {
-          // Rollback the transaction in case of an error
-          await util.promisify(destConnection.rollback).call(destConnection);
+          await promiseConn.rollback();
         }
         logger.error(`Error during migration: `, err);
-        return 0;
+        throw err;
       }
     } catch (err) {
-      logger.error('Error reading functions-migrate.list: ', err);
-      return 0;
+      logger.error('Error reading functions: ', err);
+      throw err;
     }
   }
   // DON'T migrate OTE_,test normally
@@ -194,7 +190,6 @@ module.exports = class MigratorService {
    * @returns The number of procedures migrated. 
    */
   async migrateProcedures(destConnection, dbConfig, fromList = NEW, procedureName = null) {
-    // Get the source environment and folders
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
@@ -205,17 +200,17 @@ module.exports = class MigratorService {
       const spList = `${fromList}.list`;
       const procedureNames = procedureName ? [procedureName] : await this.readComparisonList(srcEnv, dbConfig.envName, PROCEDURES, spList);
 
-      // Check if there are procedures to migrate
       if (!procedureNames?.length) {
         if (!procedureName) logger.dev(`No PROCEDURE to migrate to ${dbConfig.envName}`);
         return 0;
       }
-      // Start a transaction if experimental flag is not set
+
+      const promiseConn = destConnection.promise();
+
       if (+process.env.EXPERIMENTAL < 1) {
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
       try {
-        // Migrate each procedure
         for (const procedureName of procedureNames) {
           const fileName = `${procedureName}.sql`;
           const dropQuery = `DROP PROCEDURE IF EXISTS \`${procedureName}\`;`;
@@ -224,17 +219,15 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
-            // Drop the procedure, import the new one, and create a backup
-            await util.promisify(destConnection.query).call(destConnection, dropQuery);
+            await promiseConn.query(dropQuery);
             logger.warn('Dropped...', procedureName);
             if (this.isNotMigrateCondition(procedureName)) {
               continue;
             }
 
-            await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
+            await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
             logger.info('Created...', procedureName, '\n');
 
-            // Log to storage
             if (this.storage) {
               await this.storage.saveMigration({
                 srcEnv,
@@ -246,32 +239,27 @@ module.exports = class MigratorService {
                 status: 'SUCCESS'
               });
             }
-            // copy to backup
             this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
-            // copy to soft migrate
             this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
           }
         }
-        // Clean up the procedure list after migration (only if not single migration)
         if (!procedureName) {
           this.fileManager.saveToFile(spFolder, spList, '');
         }
-        // Commit the transaction if all queries are successful
         if (+process.env.EXPERIMENTAL < 1) {
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
         return procedureNames?.length;
       } catch (err) {
-        // Rollback the transaction in case of an error
         if (+process.env.EXPERIMENTAL < 1) {
-          await util.promisify(destConnection.rollback).call(destConnection);
+          await promiseConn.rollback();
         }
         logger.error(`Error during migration: `, err);
-        return 0;
+        throw err;
       }
     } catch (err) {
-      logger.error('Error reading procedures-migrate.list: ', err);
-      return 0;
+      logger.error('Error reading procedures: ', err);
+      throw err;
     }
   }
   /**
@@ -297,8 +285,9 @@ module.exports = class MigratorService {
         if (!triggerName) logger.dev(`No TRIGGER to migrate to ${dbConfig.envName}`);
         return 0;
       }
+      const promiseConn = destConnection.promise();
       if (+process.env.EXPERIMENTAL < 1) {
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
       try {
         for (const triggerName of triggerNames) {
@@ -308,9 +297,9 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
-            await util.promisify(destConnection.query).call(destConnection, dropQuery);
+            await promiseConn.query(dropQuery);
             logger.warn('Dropped...', triggerName);
-            await util.promisify(destConnection.query).call(destConnection, this.replaceWithEnv(importQuery, dbConfig.envName));
+            await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
             logger.info('Created...', triggerName, '\n');
             // Log to storage
             if (this.storage) {
@@ -336,16 +325,16 @@ module.exports = class MigratorService {
         }
         if (+process.env.EXPERIMENTAL < 1) {
           // Commit the transaction if all queries are successful
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
         return triggerNames?.length;
       } catch (err) {
         if (+process.env.EXPERIMENTAL < 1) {
           // Rollback the transaction in case of an error
-          await util.promisify(destConnection.rollback).call(destConnection);
+          await promiseConn.rollback();
         }
         logger.error(`Error during migration: `, err);
-        return 0;
+        throw err;
       }
     } catch (err) {
       logger.error('Error reading triggers-migrate.list: ', err);
@@ -372,9 +361,11 @@ module.exports = class MigratorService {
         if (!functionName) logger.dev(`No FUNCTION to deprecated to ${dbConfig.envName}`);
         return 0;
       }
+
+      const promiseConn = destConnection.promise();
+
       if (+process.env.EXPERIMENTAL < 1) {
-        // Start a transaction
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
       try {
         for (const functionName of functionNames) {
@@ -382,9 +373,8 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery });
           } else {
-            await util.promisify(destConnection.query).call(destConnection, dropQuery);
+            await promiseConn.query(dropQuery);
             logger.warn('Dropped...', functionName);
-            // Log to storage
             if (this.storage) {
               await this.storage.saveMigration({
                 srcEnv,
@@ -396,30 +386,26 @@ module.exports = class MigratorService {
                 status: 'SUCCESS'
               });
             }
-            // soft delete
             this.fileManager.removeFile(destFolder, `${functionName}.sql`);
           }
         }
         if (+process.env.EXPERIMENTAL < 1) {
-          // clean after migrated done (not for single migration)
           if (!functionName) {
             this.fileManager.saveToFile(fnFolder, fnList, '');
           }
-          // Commit the transaction if all queries are successful
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
         return functionNames?.length;
       } catch (err) {
         if (+process.env.EXPERIMENTAL < 1) {
-          // Rollback the transaction in case of an error
-          await util.promisify(destConnection.rollback).call(destConnection);
+          await promiseConn.rollback();
         }
         logger.error(`Error during migration: `, err);
-        return 0;
+        throw err;
       }
     } catch (err) {
-      logger.error('Error reading functions-migrate.list: ', err);
-      return 0;
+      logger.error('Error reading functions: ', err);
+      throw err;
     }
   }
 
@@ -433,35 +419,31 @@ module.exports = class MigratorService {
    * @returns The number of procedures migrated. 
    */
   async deprecateProcedures(destConnection, dbConfig, spList = 'deprecated.list', procedureName = null) {
-    // Get the source environment and folders
     const srcEnv = this.getSourceEnv(dbConfig.envName);
-    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
-    this.fileManager.makeSureFolderExisted(backupFolder);
+    const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
     try {
       const spFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
-      const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
       const procedureNames = procedureName ? [procedureName] : await this.readComparisonList(srcEnv, dbConfig.envName, PROCEDURES, spList);
-      // Check if there are procedures to migrate
+
       if (!procedureNames?.length) {
         if (!procedureName) logger.dev(`No PROCEDURE to deprecated to ${dbConfig.envName}`);
         return 0;
       }
-      // Start a transaction if experimental flag is not set
+
+      const promiseConn = destConnection.promise();
+
       if (+process.env.EXPERIMENTAL < 1) {
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
       try {
-        // Migrate each procedure
         for (const procedureName of procedureNames) {
           const dropQuery = `DROP PROCEDURE IF EXISTS \`${procedureName}\`;`;
 
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery });
           } else {
-            // Drop the procedure, import the new one, and create a backup
             logger.warn('Dropped...', procedureName);
-            await util.promisify(destConnection.query).call(destConnection, dropQuery);
-            // Log to storage
+            await promiseConn.query(dropQuery);
             if (this.storage) {
               await this.storage.saveMigration({
                 srcEnv,
@@ -473,30 +455,26 @@ module.exports = class MigratorService {
                 status: 'SUCCESS'
               });
             }
-            // soft delete
             this.fileManager.removeFile(destFolder, `${procedureName}.sql`);
           }
         }
-        // Commit the transaction if all queries are successful
         if (+process.env.EXPERIMENTAL < 1) {
-          // Clean up the procedure list after migration (not for single migration)
           if (!procedureName) {
             this.fileManager.saveToFile(spFolder, spList, '');
           }
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
         return procedureNames?.length;
       } catch (err) {
-        // Rollback the transaction in case of an error
         if (+process.env.EXPERIMENTAL < 1) {
-          await util.promisify(destConnection.rollback).call(destConnection);
+          await promiseConn.rollback();
         }
         logger.error(`Error during migration: `, err);
-        return 0;
+        throw err;
       }
     } catch (err) {
-      logger.error('Error reading procedures-migrate.list: ', err);
-      return 0;
+      logger.error('Error reading procedures: ', err);
+      throw err;
     }
   }
   /**
@@ -565,9 +543,9 @@ module.exports = class MigratorService {
 
   async isTableExists(connection, tableName) {
     try {
-      const rows = await util.promisify(connection.query)
-        .call(connection, `SHOW TABLES LIKE ?`, [tableName]);
-      return rows?.length > 0;
+      const promiseConn = connection.promise();
+      const [rows] = await promiseConn.query(`SHOW TABLES LIKE ?`, [tableName]);
+      return (rows)?.length > 0;
     } catch (err) {
       logger.error(`Error checking if table ${tableName} exists:`, err);
       return false;
@@ -584,7 +562,6 @@ module.exports = class MigratorService {
    */
   async migrateTables(destConnection, dbConfig, tableName = null) {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
-    const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${TABLES}`;
     try {
       const tblFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${TABLES}`
       const tblList = `${NEW}.list`;
@@ -593,17 +570,18 @@ module.exports = class MigratorService {
         if (!tableName) logger.dev(`No TABLE to migrate to ${dbConfig.envName}`);
         return 0;
       }
+
+      const promiseConn = destConnection.promise();
       let tablesMigrated = 0;
+
       if (+process.env.EXPERIMENTAL < 1) {
-        // Start a transaction
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
       try {
         for (const tableName of tableNames) {
           if (tableName.indexOf('pt_') === 0) {
             continue;
           }
-          const fileName = `${tableName}.sql`;
 
           if (await this.isTableExists(destConnection, tableName)) {
             logger.dev(`Table ${tableName} already exists in the destination database.`);
@@ -615,11 +593,9 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             if (global.logger) global.logger.warn('Experimental Run::', { importQuery });
           } else {
-            await util.promisify(destConnection.query).call(destConnection, importQuery);
-            if (global.logger) global.logger.dev('Executing query:', importQuery);
+            await promiseConn.query(importQuery);
             if (global.logger) global.logger.info('Created...', tableName, '\n');
 
-            // Log to storage
             if (this.storage) {
               await this.storage.saveMigration({
                 srcEnv,
@@ -634,26 +610,23 @@ module.exports = class MigratorService {
           }
           tablesMigrated++;
         }
-        // clean after migrated done (not for single migration)
         if (!tableName) {
           this.fileManager.saveToFile(tblFolder, tblList, '');
         }
         if (+process.env.EXPERIMENTAL < 1) {
-          // Commit the transaction if all queries are successful
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
         return tablesMigrated;
       } catch (err) {
         if (+process.env.EXPERIMENTAL < 1) {
-          // Rollback the transaction in case of an error
-          await util.promisify(destConnection.rollback).call(destConnection);
-          logger.error(`Error during table migration:`, err);
+          await promiseConn.rollback();
         }
-        return 0;
+        logger.error(`Error during table migration:`, err);
+        throw err;
       }
     } catch (err) {
-      logger.error('Error reading tables-migrate.list:', err);
-      return 0;
+      logger.error('Error reading tables: ', err);
+      throw err;
     }
   }
 
@@ -676,11 +649,12 @@ module.exports = class MigratorService {
         if (!tableName) logger.dev(`No TABLE to alter for ${dbConfig.envName}`);
         return 0;
       }
+
+      const promiseConn = destConnection.promise();
       let tablesAltered = 0;
 
       if (+process.env.EXPERIMENTAL < 1) {
-        // Start a transaction
-        await util.promisify(destConnection.beginTransaction).call(destConnection);
+        await promiseConn.beginTransaction();
       }
       try {
         for (const tableName of tableNames) {
@@ -688,14 +662,13 @@ module.exports = class MigratorService {
             logger.dev(`Table ${tableName} does not exist in the destination database.`);
             continue;
           }
-          const alterQuery = this.fileManager.readFromFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
+          const alterQuery = await this.fileManager.readFromFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('::Experimental Run::', { alterQuery });
           } else {
-            await util.promisify(destConnection.query).call(destConnection, alterQuery);
-            if (global.logger) global.logger.info('Updated...', alterQuery);
+            await promiseConn.query(alterQuery);
+            if (global.logger) global.logger.info('Updated...', tableName);
 
-            // Log to storage
             if (this.storage) {
               await this.storage.saveMigration({
                 srcEnv,
@@ -716,21 +689,19 @@ module.exports = class MigratorService {
         }
 
         if (+process.env.EXPERIMENTAL < 1) {
-          // Commit the transaction if all queries are successful
-          await util.promisify(destConnection.commit).call(destConnection);
+          await promiseConn.commit();
         }
         return tablesAltered;
       } catch (err) {
         if (+process.env.EXPERIMENTAL < 1) {
-          // Rollback the transaction in case of an error
-          await util.promisify(destConnection.rollback).call(destConnection);
+          await promiseConn.rollback();
         }
         logger.error(`Error during table alteration:`, err);
-        return 0;
+        throw err;
       }
     } catch (err) {
-      logger.error('Error reading tables/alters.list:', err);
-      return 0;
+      logger.error('Error reading alterations: ', err);
+      throw err;
     }
   }
 
