@@ -300,16 +300,25 @@ module.exports = class ComparatorService {
     };
   }
 
-  async reportTableStructureChange(env, tables = []) {
+  async reportTableStructureChange(env, tables = [], specificName = null) {
     try {
+      if (specificName && tables.length > 0 && !tables.includes(specificName)) {
+        return;
+      }
+
       const srcEnv = this.getSourceEnv(env);
       const mapFolder = path.join(`map-migrate`, `${srcEnv}-to-${env}`);
       const mapMigrateFolder = `${mapFolder}/${this.getDBName(srcEnv)}`;
       this.fileManager.makeSureFolderExisted(mapMigrateFolder);
 
       const tablePath = `${mapMigrateFolder}/${TABLES}`;
-      const alterColumnsList = this.fileManager.readFromFile(tablePath, 'alter-columns.list', 1);
-      const alterIndexesList = this.fileManager.readFromFile(tablePath, 'alter-indexes.list', 1);
+      let alterColumnsList = this.fileManager.readFromFile(tablePath, 'alter-columns.list', 1);
+      let alterIndexesList = this.fileManager.readFromFile(tablePath, 'alter-indexes.list', 1);
+
+      if (specificName) {
+        alterColumnsList = alterColumnsList.filter(t => t === specificName);
+        alterIndexesList = alterIndexesList.filter(t => t === specificName);
+      }
 
       if (!alterColumnsList.length && !alterIndexesList.length) {
         return;
@@ -604,17 +613,17 @@ module.exports = class ComparatorService {
     }
   }
 
-  async reportDLLChange(srcEnv, ddlType, destEnv = null) {
+  async reportDLLChange(srcEnv, ddlType, destEnv = null, specificName = null) {
     try {
       destEnv = this.getDestinationEnvironment(srcEnv, destEnv);
       if (destEnv === srcEnv) return;
 
       const mapMigrateFolder = this.setupMigrationFolder(srcEnv, destEnv);
-      const { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, ddlType);
+      let { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, ddlType, specificName);
 
-      if (!srcLines.length) return;
+      if (!srcLines.length && !destLines.length) return;
 
-      if (global.logger) global.logger.info('Comparing...', srcLines.length, '->', destLines.length, ddlType);
+      if (global.logger) global.logger.info('Comparing...', srcLines.length, '->', destLines.length, ddlType, specificName ? `(${specificName})` : '');
 
       if (ddlType === TRIGGERS) {
         await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder);
@@ -650,17 +659,17 @@ module.exports = class ComparatorService {
     }
   }
 
-  async reportTriggerChange(srcEnv, destEnv = null) {
+  async reportTriggerChange(srcEnv, destEnv = null, specificName = null) {
     try {
       destEnv = this.getDestinationEnvironment(srcEnv, destEnv);
       if (destEnv === srcEnv) return;
 
       const mapMigrateFolder = this.setupMigrationFolder(srcEnv, destEnv);
-      const { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS);
+      let { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS, specificName);
 
-      if (global.logger) global.logger.info('Comparing triggers...', srcLines.length, '->', destLines.length);
+      if (global.logger) global.logger.info('Comparing triggers...', srcLines.length, '->', destLines.length, specificName ? `(${specificName})` : '');
 
-      await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder);
+      await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder, specificName);
 
       const newTriggers = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, 'triggers', destEnv);
       const updatedTriggers = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
@@ -686,29 +695,36 @@ module.exports = class ComparatorService {
     return mapMigrateFolder;
   }
 
-  async loadDDLContent(srcEnv, destEnv, ddlType) {
+  async loadDDLContent(srcEnv, destEnv, ddlType, specificName = null) {
+    let srcLines = [];
+    let destLines = [];
+
     if (this.storage) {
-      const srcLines = await this.storage.getDDLList(srcEnv, this.getDBName(srcEnv), ddlType);
-      const destLines = await this.storage.getDDLList(destEnv, this.getDBName(destEnv), ddlType);
-      return { srcLines: srcLines.sort(), destLines: destLines.sort() };
+      srcLines = await this.storage.getDDLList(srcEnv, this.getDBName(srcEnv), ddlType);
+      destLines = await this.storage.getDDLList(destEnv, this.getDBName(destEnv), ddlType);
+    } else {
+      const srcContent = this.fileManager.readFromFile(`db/${srcEnv}/${this.getDBName(srcEnv)}/current-ddl`, `${ddlType}.list`);
+      const destContent = this.fileManager.readFromFile(`db/${destEnv}/${this.getDBName(destEnv)}/current-ddl`, `${ddlType}.list`);
+      srcLines = srcContent ? srcContent.split('\n').map(line => line.trim()).filter(l => l) : [];
+      destLines = destContent ? destContent.split('\n').map(line => line.trim()).filter(l => l) : [];
     }
 
-    const srcContent = this.fileManager.readFromFile(`db/${srcEnv}/${this.getDBName(srcEnv)}/current-ddl`, `${ddlType}.list`);
-    const destContent = this.fileManager.readFromFile(`db/${destEnv}/${this.getDBName(destEnv)}/current-ddl`, `${ddlType}.list`);
-    const srcLines = srcContent ? srcContent.split('\n').map(line => line.trim()).filter(l => l).sort() : [];
-    const destLines = destContent ? destContent.split('\n').map(line => line.trim()).filter(l => l).sort() : [];
+    if (specificName) {
+      srcLines = srcLines.filter(line => line === specificName);
+      destLines = destLines.filter(line => line === specificName);
+    }
 
-    return { srcLines, destLines };
+    return { srcLines: srcLines.sort(), destLines: destLines.sort() };
   }
 
-  async handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder) {
-    const { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS);
+  async handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder, specificName = null) {
+    let { srcLines, destLines } = await this.loadDDLContent(srcEnv, destEnv, TRIGGERS, specificName);
     const srcTriggers = await this.parseTriggerList(srcEnv, srcLines);
     const destTriggers = await this.parseTriggerList(destEnv, destLines);
     const triggerChanges = this.compareTriggerLists(srcTriggers, destTriggers);
 
     if (triggerChanges.length > 0) {
-      this.saveTriggerChanges(mapMigrateFolder, triggerChanges);
+      this.saveTriggerChanges(mapMigrateFolder, triggerChanges, specificName);
     }
   }
 
@@ -816,26 +832,26 @@ module.exports = class ComparatorService {
     process.stdout.write('\x1b[0m\n');
   }
 
-  compare(ddl) {
+  compare(ddl, specificName = null) {
     return async (env) => {
-      if (global.logger) global.logger.warn(`Start comparing ${ddl} changes for...`, env);
+      if (global.logger) global.logger.warn(`Start comparing ${ddl} changes for...`, env, specificName ? `(${specificName})` : '');
       const srcEnv = this.getSourceEnv(env);
       switch (ddl) {
         case FUNCTIONS:
-          await this.reportDLLChange(srcEnv, FUNCTIONS, env);
+          await this.reportDLLChange(srcEnv, FUNCTIONS, env, specificName);
           break;
         case PROCEDURES:
-          await this.reportDLLChange(srcEnv, PROCEDURES, env);
+          await this.reportDLLChange(srcEnv, PROCEDURES, env, specificName);
           break;
         case TABLES:
-          await this.reportTableStructureChange(env);
-          await this.reportDLLChange(srcEnv, TABLES, env);
+          await this.reportTableStructureChange(env, [], specificName);
+          await this.reportDLLChange(srcEnv, TABLES, env, specificName);
           break;
         case VIEWS:
-          await this.reportDLLChange(srcEnv, VIEWS, env);
+          await this.reportDLLChange(srcEnv, VIEWS, env, specificName);
           break;
         case TRIGGERS:
-          await this.reportTriggerChange(srcEnv, env);
+          await this.reportTriggerChange(srcEnv, env, specificName);
           break;
         default:
           this.report2console(env);

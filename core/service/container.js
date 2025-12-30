@@ -82,7 +82,7 @@ module.exports = class Container {
         storage,
         domainNormalization: this.config.domainNormalization
       });
-      return (ddl) => comparatorService.compare(ddl);
+      return (ddl, name = null) => comparatorService.compare(ddl, name);
     });
     return this;
   }
