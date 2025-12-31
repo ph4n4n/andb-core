@@ -339,7 +339,7 @@ module.exports = class ComparatorService {
 
       // Log detailed changes for each table
       for (const tableName of alterColumnsList) {
-        const alterSQL = this.checkDiffAndGenAlter(tableName, env);
+        const alterSQL = await this.checkDiffAndGenAlter(tableName, env);
         if (global.logger) global.logger.info(`📋 Table \`${tableName}\` has column changes:`);
         if (alterSQL.columns) {
           if (global.logger) global.logger.info(`📋 Column changes for table \`${tableName}\`: ${alterSQL.columns}`);
@@ -347,7 +347,7 @@ module.exports = class ComparatorService {
       }
 
       for (const tableName of alterIndexesList) {
-        const alterSQL = this.checkDiffAndGenAlter(tableName, env);
+        const alterSQL = await this.checkDiffAndGenAlter(tableName, env);
         if (alterSQL.indexes) {
           if (global.logger) global.logger.info(`📋 Index changes for ${tableName}: ${alterSQL.indexes}`);
         }
@@ -370,15 +370,24 @@ module.exports = class ComparatorService {
     this.fileManager.saveToFile(alterFolder, `${tableName}.sql`, alters);
   }
 
-  checkDiffAndGenAlter(tableName, env) {
-    const srcFolder = `db/${this.getSourceEnv(env)}/${this.getDBName(this.getSourceEnv(env))}/tables`;
-    const destFolder = `db/${env}/${this.getDBName(env)}/tables`;
+  async checkDiffAndGenAlter(tableName, env) {
+    let srcContent, destContent;
+    const srcEnv = this.getSourceEnv(env);
+    const srcDbName = this.getDBName(srcEnv);
+    const destDbName = this.getDBName(env);
 
-    const srcContent = this.fileManager.readFromFile(srcFolder, `${tableName}.sql`);
-    const destContent = this.fileManager.readFromFile(destFolder, `${tableName}.sql`);
+    if (this.storage) {
+      srcContent = await this.storage.getDDL(srcEnv, srcDbName, TABLES, tableName);
+      destContent = await this.storage.getDDL(env, destDbName, TABLES, tableName);
+    } else {
+      const srcFolder = `db/${srcEnv}/${srcDbName}/tables`;
+      const destFolder = `db/${env}/${destDbName}/tables`;
+      srcContent = this.fileManager.readFromFile(srcFolder, `${tableName}.sql`);
+      destContent = this.fileManager.readFromFile(destFolder, `${tableName}.sql`);
+    }
 
     if (!srcContent) {
-      return { msg: `Table: ${this.getSourceEnv(env)}:"${tableName}" not existed!` };
+      return { msg: `Table: ${srcEnv}:"${tableName}" not existed!` };
     }
 
     if (!destContent) {
@@ -505,17 +514,27 @@ module.exports = class ComparatorService {
     if (this.storage) {
       if (updatedLines.length > 0) {
         for (const ddlName of updatedLines) {
+          let alterStatements = null;
+          if (ddlType === TABLES) {
+            const alterResult = await this.checkDiffAndGenAlter(ddlName, destEnv);
+            alterStatements = [];
+            if (alterResult.columns) alterStatements.push(alterResult.columns);
+            if (alterResult.indexes) alterStatements.push(alterResult.indexes);
+            if (alterResult.deprecated) alterStatements.push(alterResult.deprecated);
+            
+            // Also generate files if needed for reportDLLChange compatibility
+            await this.generateTableAlterFiles([ddlName], srcEnv, destEnv, reportDDLFolder);
+          }
+
           await this.storage.saveComparison({
             srcEnv,
             destEnv,
             database: this.getDBName(srcEnv),
             type: ddlType,
             name: ddlName,
-            status: 'updated'
+            status: 'updated',
+            alterStatements
           });
-        }
-        if (ddlType === TABLES) {
-          await this.generateTableAlterFiles(updatedLines, srcEnv, destEnv, reportDDLFolder);
         }
       }
 
@@ -560,7 +579,7 @@ module.exports = class ComparatorService {
     const alterIndexesList = [];
 
     for (const tableName of updatedTables) {
-      const alterResult = this.checkDiffAndGenAlter(tableName, destEnv);
+      const alterResult = await this.checkDiffAndGenAlter(tableName, destEnv);
 
       if (alterResult.columns && alterResult.columns.length > 0) {
         alterColumnsList.push(tableName);
@@ -570,6 +589,10 @@ module.exports = class ComparatorService {
       if (alterResult.indexes && alterResult.indexes.length > 0) {
         alterIndexesList.push(tableName);
         this.writeAlter(destEnv, tableName, 'indexes', alterResult.indexes);
+      }
+      
+      if (alterResult.deprecated && alterResult.deprecated.length > 0) {
+        this.writeAlter(destEnv, tableName, 'deprecated', alterResult.deprecated);
       }
     }
 

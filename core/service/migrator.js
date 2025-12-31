@@ -15,7 +15,7 @@ const mysql = require('mysql2');
 
 const {
   STATUSES: { NEW, UPDATED, DEPRECATED, OTE },
-  DDL: { TABLES, PROCEDURES, FUNCTIONS, TRIGGERS }
+  DDL: { TABLES, PROCEDURES, FUNCTIONS, TRIGGERS, VIEWS }
 } = require('../configs/constants');
 
 // Remove direct import of file helper
@@ -44,6 +44,15 @@ module.exports = class MigratorService {
 
     // Storage strategy (File/SQLite/Hybrid)
     this.storage = dependencies.storage || null;
+
+    // DEBUG LOGS
+    if (global.logger) {
+      global.logger.info('[MigratorService] Initialized');
+      global.logger.info(`[MigratorService] Storage available: ${!!this.storage}`);
+      if (this.storage) {
+        global.logger.info(`[MigratorService] Storage class: ${this.storage.constructor.name}`);
+      }
+    }
   }
 
   /**
@@ -112,7 +121,7 @@ module.exports = class MigratorService {
 
       const promiseConn = destConnection.promise();
 
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
 
@@ -123,16 +132,16 @@ module.exports = class MigratorService {
           const importQuery = await this.readDDL(srcEnv, FUNCTIONS, functionName);
 
           if (+process.env.EXPERIMENTAL === 1) {
-            logger.warn('Experimental Run::', { dropQuery, importQuery });
+            if (global.logger) global.logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
             await promiseConn.query(dropQuery);
-            logger.warn('Dropped...', functionName);
+            if (global.logger) global.logger.warn('Dropped...', functionName);
 
             if (this.isNotMigrateCondition(functionName)) {
               continue;
             }
             await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
-            logger.info('Created...', functionName, '\n');
+            if (global.logger) global.logger.info('Created...', functionName, '\n');
 
             if (this.storage) {
               await this.storage.saveMigration({
@@ -156,19 +165,19 @@ module.exports = class MigratorService {
           this.fileManager.saveToFile(fnFolder, fnList, '');
         }
 
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.commit();
         }
         return functionNames.length;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.rollback();
         }
-        logger.error(`Error during migration: `, err);
+        if (global.logger) global.logger.error(`Error during migration: `, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading functions: ', err);
+      if (global.logger) global.logger.error('Error reading functions: ', err);
       throw err;
     }
   }
@@ -207,7 +216,7 @@ module.exports = class MigratorService {
 
       const promiseConn = destConnection.promise();
 
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
       try {
@@ -246,19 +255,19 @@ module.exports = class MigratorService {
         if (!procedureName) {
           this.fileManager.saveToFile(spFolder, spList, '');
         }
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.commit();
         }
         return procedureNames?.length;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.rollback();
         }
-        logger.error(`Error during migration: `, err);
+        if (global.logger) global.logger.error(`Error during migration: `, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading procedures: ', err);
+      if (global.logger) global.logger.error('Error reading procedures: ', err);
       throw err;
     }
   }
@@ -286,7 +295,7 @@ module.exports = class MigratorService {
         return 0;
       }
       const promiseConn = destConnection.promise();
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
       try {
@@ -295,12 +304,12 @@ module.exports = class MigratorService {
           const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
           const importQuery = await this.readDDL(srcEnv, TRIGGERS, triggerName);
           if (+process.env.EXPERIMENTAL === 1) {
-            logger.warn('Experimental Run::', { dropQuery, importQuery });
+            if (global.logger) global.logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
             await promiseConn.query(dropQuery);
-            logger.warn('Dropped...', triggerName);
+            if (global.logger) global.logger.warn('Dropped...', triggerName);
             await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
-            logger.info('Created...', triggerName, '\n');
+            if (global.logger) global.logger.info('Created...', triggerName, '\n');
             // Log to storage
             if (this.storage) {
               await this.storage.saveMigration({
@@ -323,21 +332,21 @@ module.exports = class MigratorService {
         if (!triggerName) {
           this.fileManager.saveToFile(triggerFolder, triggerList, '');
         }
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           // Commit the transaction if all queries are successful
           await promiseConn.commit();
         }
         return triggerNames?.length;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           // Rollback the transaction in case of an error
           await promiseConn.rollback();
         }
-        logger.error(`Error during migration: `, err);
+        if (global.logger) global.logger.error(`Error during migration: `, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading triggers-migrate.list: ', err);
+      if (global.logger) global.logger.error('Error reading triggers-migrate.list: ', err);
       return 0;
     }
   }
@@ -364,7 +373,7 @@ module.exports = class MigratorService {
 
       const promiseConn = destConnection.promise();
 
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
       try {
@@ -389,7 +398,7 @@ module.exports = class MigratorService {
             this.fileManager.removeFile(destFolder, `${functionName}.sql`);
           }
         }
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           if (!functionName) {
             this.fileManager.saveToFile(fnFolder, fnList, '');
           }
@@ -397,14 +406,14 @@ module.exports = class MigratorService {
         }
         return functionNames?.length;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.rollback();
         }
-        logger.error(`Error during migration: `, err);
+        if (global.logger) global.logger.error(`Error during migration: `, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading functions: ', err);
+      if (global.logger) global.logger.error('Error reading functions: ', err);
       throw err;
     }
   }
@@ -432,7 +441,7 @@ module.exports = class MigratorService {
 
       const promiseConn = destConnection.promise();
 
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
       try {
@@ -458,7 +467,7 @@ module.exports = class MigratorService {
             this.fileManager.removeFile(destFolder, `${procedureName}.sql`);
           }
         }
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           if (!procedureName) {
             this.fileManager.saveToFile(spFolder, spList, '');
           }
@@ -466,14 +475,14 @@ module.exports = class MigratorService {
         }
         return procedureNames?.length;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.rollback();
         }
-        logger.error(`Error during migration: `, err);
+        if (global.logger) global.logger.error(`Error during migration: `, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading procedures: ', err);
+      if (global.logger) global.logger.error('Error reading procedures: ', err);
       throw err;
     }
   }
@@ -494,7 +503,7 @@ module.exports = class MigratorService {
       if (!triggerName) logger.dev(`No TRIGGER to deprecated to ${dbConfig.envName}`);
       return 0;
     }
-    if (+process.env.EXPERIMENTAL < 1) {
+    if (!(process.env.EXPERIMENTAL >= 1)) {
       await util.promisify(destConnection.beginTransaction).call(destConnection);
     }
     try {
@@ -525,17 +534,172 @@ module.exports = class MigratorService {
       if (!triggerName) {
         this.fileManager.saveToFile(triggerFolder, triggerList, '');
       }
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         // Commit the transaction if all queries are successful
         await util.promisify(destConnection.commit).call(destConnection);
       }
       return triggerNames?.length;
     } catch (err) {
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         // Rollback the transaction in case of an error
         await util.promisify(destConnection.rollback).call(destConnection);
       }
-      logger.error('Error reading triggers-migrate.list: ', err);
+      if (global.logger) global.logger.error('Error during trigger deprecation: ', err);
+      return 0;
+    }
+  }
+
+
+  /**
+   * Migrates views from one database to another.
+   * 
+   * @param {*} destConnection The destination database connection. 
+   * @param {*} dbConfig The configuration for the databases.
+   * @param {*} fromList The list of views to migrate. 
+   * @param {string} [name=null] - Specific view name to migrate. If provided, skips list file.
+   * @returns The number of views migrated. 
+   */
+
+  async migrateViews(destConnection, dbConfig, fromList = NEW, viewName = null) {
+    const srcEnv = this.getSourceEnv(dbConfig.envName);
+    const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${VIEWS}`;
+    const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${VIEWS}`;
+    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${VIEWS}`;
+    this.fileManager.makeSureFolderExisted(backupFolder);
+    try {
+      const viewFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${VIEWS}`;
+      const viewList = `${fromList}.list`;
+      const viewNames = viewName ? [viewName] : await this.readComparisonList(srcEnv, dbConfig.envName, VIEWS, viewList);
+      if (!viewNames?.length) {
+        if (!viewName) logger.dev(`No VIEW to migrate to ${dbConfig.envName}`);
+        return 0;
+      }
+
+      // Views migration is best-effort due to dependencies.
+      // DDLs cause implicit commits, so global transaction is not useful here.
+      // We process each view individually and track failures.
+
+      const promiseConn = destConnection.promise();
+      const failedViews = [];
+      let successCount = 0;
+
+      for (const viewName of viewNames) {
+        try {
+          const fileName = `${viewName}.sql`;
+          const dropQuery = `DROP VIEW IF EXISTS \`${viewName}\`;`;
+          const importQuery = await this.readDDL(srcEnv, VIEWS, viewName);
+
+          if (+process.env.EXPERIMENTAL === 1) {
+            if (global.logger) global.logger.warn('Experimental Run::', { dropQuery, importQuery });
+          } else {
+            // Drop
+            await promiseConn.query(dropQuery);
+            if (global.logger) global.logger.warn('Dropped...', viewName);
+
+            // Create
+            await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
+            if (global.logger) global.logger.info('Created...', viewName);
+
+            // Log to storage
+            if (this.storage) {
+              await this.storage.saveMigration({
+                srcEnv,
+                destEnv: dbConfig.envName,
+                database: this.getDBName(srcEnv),
+                type: VIEWS,
+                name: viewName,
+                operation: fromList === DEPRECATED ? 'DROP' : 'CREATE',
+                status: 'SUCCESS'
+              });
+            }
+            // copy to backup & soft migrate
+            this.fileManager.copyFile(path.join(destFolder, fileName), path.join(backupFolder, fileName));
+            this.fileManager.copyFile(path.join(srcFolder, fileName), path.join(destFolder, fileName));
+          }
+          successCount++;
+        } catch (err) {
+          if (global.logger) global.logger.error(`Error migrating view ${viewName}:`, err.message);
+          failedViews.push(viewName);
+        }
+      }
+
+      // Update the list file with remaining (failed) views
+      if (!viewName) {
+        if (failedViews.length > 0) {
+          if (global.logger) global.logger.warn(`Updated ${viewList} with ${failedViews.length} failed views.`);
+          this.fileManager.saveToFile(viewFolder, viewList, failedViews.join('\n'));
+        } else {
+          this.fileManager.saveToFile(viewFolder, viewList, '');
+        }
+      }
+
+      return successCount;
+    } catch (err) {
+      if (global.logger) global.logger.error('Error in migrateViews:', err);
+      // Don't throw, return what we achieved
+      return 0;
+    }
+  }
+
+  /**
+   * Remove deprecated views from destination db.
+   * @param {*} destConnection 
+   * @param {*} dbConfig 
+   * @param {string} [viewList='deprecated.list'] - The list file name for deprecated views.
+   * @param {string} [name=null] - Specific view name to deprecate. If provided, skips list file.
+   * @returns 
+   */
+  async deprecateViews(destConnection, dbConfig, viewList = 'deprecated.list', viewName = null) {
+    const srcEnv = this.getSourceEnv(dbConfig.envName);
+    const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${VIEWS}`;
+    const viewFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${VIEWS}`;
+    const viewNames = viewName ? [viewName] : await this.readComparisonList(srcEnv, dbConfig.envName, VIEWS, viewList);
+    if (!viewNames?.length) {
+      if (!viewName) logger.dev(`No VIEW to deprecated to ${dbConfig.envName}`);
+      return 0;
+    }
+    if (!(process.env.EXPERIMENTAL >= 1)) {
+      await util.promisify(destConnection.beginTransaction).call(destConnection);
+    }
+    try {
+      for (const viewName of viewNames) {
+        const dropQuery = `DROP VIEW IF EXISTS \`${viewName}\`;`;
+        if (+process.env.EXPERIMENTAL === 1) {
+          logger.warn('Experimental Run::', { dropQuery });
+        } else {
+          await util.promisify(destConnection.query).call(destConnection, dropQuery);
+          logger.warn('Dropped...', viewName);
+          // Log to storage
+          if (this.storage) {
+            await this.storage.saveMigration({
+              srcEnv,
+              destEnv: dbConfig.envName,
+              database: this.getDBName(srcEnv),
+              type: VIEWS,
+              name: viewName,
+              operation: 'DROP',
+              status: 'SUCCESS'
+            });
+          }
+          // soft delete
+          this.fileManager.removeFile(destFolder, `${viewName}.sql`);
+        }
+      }
+      // Clean up the view list after migration (only if not single migration)
+      if (!viewName) {
+        this.fileManager.saveToFile(viewFolder, viewList, '');
+      }
+      if (!(process.env.EXPERIMENTAL >= 1)) {
+        // Commit the transaction if all queries are successful
+        await util.promisify(destConnection.commit).call(destConnection);
+      }
+      return viewNames?.length;
+    } catch (err) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
+        // Rollback the transaction in case of an error
+        await util.promisify(destConnection.rollback).call(destConnection);
+      }
+      if (global.logger) global.logger.error('Error during view deprecation: ', err);
       return 0;
     }
   }
@@ -547,7 +711,7 @@ module.exports = class MigratorService {
       const [rows] = await promiseConn.query(`SHOW TABLES LIKE ?`, [tableName]);
       return (rows)?.length > 0;
     } catch (err) {
-      logger.error(`Error checking if table ${tableName} exists:`, err);
+      if (global.logger) global.logger.error(`Error checking if table ${tableName} exists:`, err);
       return false;
     }
   }
@@ -574,7 +738,7 @@ module.exports = class MigratorService {
       const promiseConn = destConnection.promise();
       let tablesMigrated = 0;
 
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
       try {
@@ -613,19 +777,19 @@ module.exports = class MigratorService {
         if (!tableName) {
           this.fileManager.saveToFile(tblFolder, tblList, '');
         }
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.commit();
         }
         return tablesMigrated;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.rollback();
         }
-        logger.error(`Error during table migration:`, err);
+        if (global.logger) global.logger.error(`Error during table migration:`, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading tables: ', err);
+      if (global.logger) global.logger.error('Error reading tables: ', err);
       throw err;
     }
   }
@@ -640,6 +804,7 @@ module.exports = class MigratorService {
    * @returns The number of tables altered. 
    */
   async alterTableColumns(destConnection, dbConfig, alterType = 'columns', tableName = null) {
+    if (global.logger) global.logger.info(`[Migrator] alterTableColumns called for ${tableName}. Storage available: ${!!this.storage}`);
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const tableMap = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/tables`;
     try {
@@ -653,7 +818,7 @@ module.exports = class MigratorService {
       const promiseConn = destConnection.promise();
       let tablesAltered = 0;
 
-      if (+process.env.EXPERIMENTAL < 1) {
+      if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
       }
       try {
@@ -662,11 +827,52 @@ module.exports = class MigratorService {
             logger.dev(`Table ${tableName} does not exist in the destination database.`);
             continue;
           }
-          const alterQuery = await this.fileManager.readFromFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
+
+          let alterStatements = [];
+
+          // 1. Try to get from SQLite storage first
+          if (this.storage) {
+            if (global.logger) global.logger.info(`[Migrator] Querying storage for ${srcEnv}->${dbConfig.envName} (${this.getDBName(srcEnv)})`);
+            const comparisons = await this.storage.getComparisons(srcEnv, dbConfig.envName, this.getDBName(srcEnv), TABLES);
+
+            const comp = comparisons.find(c => c.name.toLowerCase() === tableName.toLowerCase() && c.status === 'updated');
+            if (comp) {
+              if (global.logger) global.logger.info(`[Migrator] Found match for ${tableName}. HasAlter: ${!!comp.alterStatements}`);
+              if (comp.alterStatements) {
+                // Ensure array
+                alterStatements = Array.isArray(comp.alterStatements) ? comp.alterStatements : [comp.alterStatements];
+                // If it is a string (legacy/bug), try to parse or wrap
+                if (typeof alterStatements === 'string') {
+                  try { alterStatements = JSON.parse(alterStatements); } catch (e) { alterStatements = [alterStatements]; }
+                }
+              }
+            } else {
+              if (global.logger) {
+                global.logger.info(`[Migrator] No 'updated' record found for ${tableName}`);
+                global.logger.dev(`[Migrator] Available tables: ${comparisons.map(c => `${c.name}(${c.status})`).join(', ')}`);
+              }
+            }
+          }
+
+          // 2. Fallback to physical file if SQLite is empty
+          if (alterStatements.length === 0) {
+            const alterQuery = await this.fileManager.readFromFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
+            if (alterQuery) {
+              alterStatements = [alterQuery];
+            }
+          }
+
+          if (alterStatements.length === 0) {
+            if (global.logger) global.logger.warn(`No alter statements found for ${tableName} (Type: ${alterType})`);
+            continue;
+          }
+
           if (+process.env.EXPERIMENTAL === 1) {
-            logger.warn('::Experimental Run::', { alterQuery });
+            logger.warn('::Experimental Run::', { tableName, alterStatements });
           } else {
-            await promiseConn.query(alterQuery);
+            for (const query of alterStatements) {
+              await promiseConn.query(query);
+            }
             if (global.logger) global.logger.info('Updated...', tableName);
 
             if (this.storage) {
@@ -680,6 +886,8 @@ module.exports = class MigratorService {
                 status: 'SUCCESS'
               });
             }
+
+            // Clean up files if they exist
             this.fileManager.removeFile(`${tableMap}/alters/${alterType}`, `${tableName}.sql`);
           }
           tablesAltered++;
@@ -688,19 +896,19 @@ module.exports = class MigratorService {
           this.fileManager.saveToFile(tableMap, `alter-${alterType}.list`, '');
         }
 
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.commit();
         }
         return tablesAltered;
       } catch (err) {
-        if (+process.env.EXPERIMENTAL < 1) {
+        if (!(process.env.EXPERIMENTAL >= 1)) {
           await promiseConn.rollback();
         }
-        logger.error(`Error during table alteration:`, err);
+        if (global.logger) global.logger.error(`Error during table alteration:`, err);
         throw err;
       }
     } catch (err) {
-      logger.error('Error reading alterations: ', err);
+      if (global.logger) global.logger.error('Error reading alterations: ', err);
       throw err;
     }
   }
@@ -764,7 +972,7 @@ module.exports = class MigratorService {
         );
 
         try {
-          if (+process.env.EXPERIMENTAL < 1) {
+          if (!(process.env.EXPERIMENTAL >= 1)) {
             // Start a transaction
             await util.promisify(destConnection.beginTransaction).call(destConnection);
           }
@@ -777,31 +985,40 @@ module.exports = class MigratorService {
               await util.promisify(destConnection.query).call(destConnection, insertQuery);
             }
           };
-          if (+process.env.EXPERIMENTAL < 1) {
+          if (!(process.env.EXPERIMENTAL >= 1)) {
             // Commit the transaction if all queries are successful
             await util.promisify(destConnection.commit).call(destConnection);
           }
         } catch (err) {
-          if (+process.env.EXPERIMENTAL < 1) {
+          if (!(process.env.EXPERIMENTAL >= 1)) {
             // Rollback the transaction in case of an error
             await util.promisify(destConnection.rollback).call(destConnection);
           }
-          logger.error(`Error during seeding data:`, err);
+          if (global.logger) global.logger.error(`Error during seeding data:`, err);
         }
         tablesSeeded++;
       }
 
       return tablesSeeded;
     } catch (err) {
-      logger.error('Error reading tables-migrate.list:', err);
+      if (global.logger) global.logger.error('Error reading tables-migrate.list:', err);
       return 0;
     }
   }
 
 
+  /**
+   * Migrate DDL
+   * @param {string} ddl - DDL Type (TABLES, PROCEDURES, etc)
+   * @param {string} fromList - List type (NEW, UPDATED)
+   * @param {string} [specificName=null] - Specific DDL name
+   * @returns {Function} Async function for migration
+   */
   migrate(ddl, fromList, specificName = null) {
+    if (global.logger) global.logger.info(`[Migrator] migrate() called with: ddl=${ddl}, list=${fromList}, name=${specificName}`);
     return async (env) => {
-      logger.warn(`Start migrating ${fromList} ${ddl} ${specificName ? specificName : 'changes'} for...`, env);
+      if (global.logger) global.logger.info(`[Migrator] Executing migration logic for ${env}`);
+      if (global.logger) global.logger.warn(`Start migrating ${fromList} ${ddl} ${specificName ? specificName : 'changes'} for...`, env);
       const start = Date.now();
       const dbConfig = this.getDBDestination(env);
       const destConnection = mysql.createConnection({
@@ -813,7 +1030,6 @@ module.exports = class MigratorService {
       });
 
       const connect = util.promisify(destConnection.connect).bind(destConnection);
-      const end = util.promisify(destConnection.end).bind(destConnection);
 
       try {
         await connect();
@@ -841,13 +1057,26 @@ module.exports = class MigratorService {
             }
             break;
           case TABLES:
-            if (fromList === NEW) {
+            const listType = fromList.toLowerCase();
+
+            if (listType === NEW) {
               rs = await this.migrateTables(destConnection, dbConfig, specificName);
-            } else if (fromList === UPDATED) {
-              alterRs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
-              alterRs += await this.alterTableColumns(destConnection, dbConfig, 'indexes', specificName);
+            } else if (listType === UPDATED) {
+              if (this.storage) {
+                rs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
+              } else {
+                rs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
+                rs += await this.alterTableColumns(destConnection, dbConfig, 'indexes', specificName);
+              }
             }
-            logger.dev(`Alter ${alterRs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
+            if (global.logger) global.logger.info(`Migration of ${ddl} ${env} done in:: ${Date.now() - start}ms`);
+            break;
+          case VIEWS:
+            if (fromList === DEPRECATED) {
+              rs = await this.deprecateViews(destConnection, dbConfig, 'deprecated.list', specificName);
+            } else {
+              rs = await this.migrateViews(destConnection, dbConfig, fromList, specificName);
+            }
             break;
           case TRIGGERS:
             if (fromList === DEPRECATED) {
@@ -858,9 +1087,10 @@ module.exports = class MigratorService {
             break;
         }
 
-        await end();
-        logger.dev(`Migrate ${rs} ${env}.${this.getDBName(env)}.${ddl} done in:: ${Date.now() - start}ms`);
-        return rs + alterRs;
+        destConnection.end(); // Closing connection properly
+        const total = rs + alterRs;
+        if (global.logger) global.logger.info(`Migrate successful: ${rs} created, ${alterRs} altered. Total ${total} ${ddl} in ${Date.now() - start}ms`);
+        return total;
       } catch (err) {
         if (global.logger) global.logger.error('Error during migration: ', err);
         try { destConnection.end(); } catch (e) { }
@@ -868,6 +1098,4 @@ module.exports = class MigratorService {
       }
     };
   }
-
-  // Removed migrateSingleItem to rely on existing code with enhanced params
 }
