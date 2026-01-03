@@ -85,6 +85,9 @@ module.exports = class ExporterService {
           });
         }
 
+        // NEW: Collect exported data
+        const exportedData = [];
+
         // Export triggers to separate files
         for (const row of triggerResults) {
           const triggerName = row.Trigger;
@@ -100,11 +103,31 @@ module.exports = class ExporterService {
               .replace(/\sCHARSET\s+\w+\s/, " ");
 
             this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
+
+            exportedData.push({
+              name: triggerName,
+              ddl: formattedStatement
+            });
           } catch (error) {
             if (global.logger) global.logger.error(`Error exporting trigger ${triggerName}:`, error);
           }
         }
-        return resolve(triggerResults.length);
+
+        // NEW: Save to Storage
+        if (this.storage) {
+          await this.storage.saveExport(
+            dbConfig.envName,
+            this.getDBName(dbConfig.envName),
+            TRIGGERS,
+            exportedData,
+            !specificName
+          );
+        }
+
+        return resolve({
+          count: triggerResults.length,
+          data: exportedData
+        });
       });
     });
   }
@@ -195,7 +218,8 @@ module.exports = class ExporterService {
               dbConfig.envName,
               self.getDBName(dbConfig.envName),
               FUNCTIONS,
-              exportedData
+              exportedData,
+              !specificName
             );
           }
 
@@ -294,7 +318,8 @@ module.exports = class ExporterService {
               dbConfig.envName,
               this.getDBName(dbConfig.envName),
               PROCEDURES,
-              exportedData
+              exportedData,
+              !specificName
             );
           }
 
@@ -352,7 +377,7 @@ module.exports = class ExporterService {
           }
 
           if (this.storage) {
-            await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), 'views', exportedData);
+            await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), 'views', exportedData, !specificName);
           }
 
           return resolve({ count: viewResults.length, data: exportedData });
@@ -454,7 +479,8 @@ module.exports = class ExporterService {
               dbConfig.envName,
               this.getDBName(dbConfig.envName),
               TABLES,
-              exportedData
+              exportedData,
+              !specificName
             );
           }
 
@@ -617,8 +643,9 @@ module.exports = class ExporterService {
 
             const duration = Date.now() - startTime;
 
-            // Extract count from result (can be number or {count, data})
+            // Extract count and data from result
             const count = typeof result === 'object' && result.count !== undefined ? result.count : result;
+            const data = typeof result === 'object' && result.data !== undefined ? result.data : [];
 
             // Log if logger available
             if (global.logger) {
@@ -632,6 +659,7 @@ module.exports = class ExporterService {
               env,
               database: this.getDBName(env),
               count,
+              data,
               duration
             });
           } catch (error) {

@@ -152,6 +152,25 @@ CREATE INDEX IF NOT EXISTS idx_mig_env ON migration_history(src_environment, des
 CREATE INDEX IF NOT EXISTS idx_mig_status ON migration_history(status);
 
 -- ============================================
+-- DDL Snapshots (Historical versions)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS ddl_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  environment TEXT NOT NULL,
+  database_name TEXT NOT NULL,
+  ddl_type TEXT NOT NULL,
+  ddl_name TEXT NOT NULL,
+  ddl_content TEXT NOT NULL,
+  checksum TEXT,
+  version_tag TEXT,                    -- Optional tag (e.g., 'pre-migration-20240101')
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshot_lookup ON ddl_snapshots(environment, database_name, ddl_type, ddl_name);
+CREATE INDEX IF NOT EXISTS idx_snapshot_version ON ddl_snapshots(version_tag);
+
+-- ============================================
 -- Storage Actions Log
 -- ============================================
 

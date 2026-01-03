@@ -115,6 +115,27 @@ class StorageStrategy {
   async logAction(actionType, status, details) {
     throw new Error('logAction must be implemented');
   }
+
+  /**
+   * Save DDL snapshot
+   */
+  async saveSnapshot(data) {
+    throw new Error('saveSnapshot must be implemented');
+  }
+
+  /**
+   * Get snapshots for an object
+   */
+  async getSnapshots(environment, database, type, name) {
+    throw new Error('getSnapshots must be implemented');
+  }
+
+  /**
+   * Get all snapshots globally
+   */
+  async getAllSnapshots(limit) {
+    throw new Error('getAllSnapshots must be implemented');
+  }
 }
 
 /**
@@ -232,6 +253,20 @@ class FileStorage extends StorageStrategy {
 
   async logAction(actionType, status, details) {
     return true;
+  }
+
+  async saveSnapshot(data) {
+    // For FileStorage, snapshots are already handled by copy to backup folder in Migrator
+    return true;
+  }
+
+  async getSnapshots(environment, database, type, name) {
+    // Not implemented for file storage yet beyond manual folder browsing
+    return [];
+  }
+
+  async getAllSnapshots(limit) {
+    return [];
   }
 }
 
@@ -362,6 +397,38 @@ class SQLiteStorage extends StorageStrategy {
     `);
     stmt.run(actionType, status, typeof details === 'object' ? JSON.stringify(details) : details);
     return true;
+  }
+
+  async saveSnapshot(data) {
+    const { environment, database, type, name, content, versionTag } = data;
+    const crypto = require('crypto');
+    const checksum = crypto.createHash('md5').update(content || '').digest('hex');
+
+    const stmt = this.db.prepare(`
+      INSERT INTO ddl_snapshots (environment, database_name, ddl_type, ddl_name, ddl_content, checksum, version_tag)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(environment, database, type, name, content, checksum, versionTag || null);
+    return true;
+  }
+
+  async getSnapshots(environment, database, type, name) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM ddl_snapshots
+      WHERE environment = ? AND database_name = ? AND ddl_type = ? AND ddl_name = ?
+      ORDER BY created_at DESC
+    `);
+    return stmt.all(environment, database, type, name);
+  }
+
+  async getAllSnapshots(limit = 100) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM ddl_snapshots
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
   }
 
   async saveComparison(comparison) {
@@ -547,6 +614,18 @@ class HybridStorage extends StorageStrategy {
 
   async exportToFiles() {
     return await this.sqlite.exportToFiles();
+  }
+
+  async saveSnapshot(data) {
+    return await this.sqlite.saveSnapshot(data);
+  }
+
+  async getSnapshots(environment, database, type, name) {
+    return await this.sqlite.getSnapshots(environment, database, type, name);
+  }
+
+  async getAllSnapshots(limit) {
+    return await this.sqlite.getAllSnapshots(limit);
   }
 }
 

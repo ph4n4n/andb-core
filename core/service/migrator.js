@@ -9,6 +9,9 @@
  * Copyright (c) 2024 ph4n4n
  * https://github.com/ph4n4n/@anph/core
  */
+// Removed static _backupFolder constant to use dynamic method instead
+
+
 const path = require('path');
 const util = require('util');
 const mysql = require('mysql2');
@@ -22,8 +25,6 @@ const {
 // const {
 //   readFromFile, saveToFile, copyFile, makeSureFolderExisted, removeFile
 // } = require('../utils/file.helper');
-// YYYY_MM_DD
-const _backupFolder = `backup/${new Date().getFullYear()}_${new Date().getMonth() + 1}_${new Date().getDate()}`
 
 
 /**
@@ -55,6 +56,14 @@ module.exports = class MigratorService {
     }
   }
 
+  getBackupFolder() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    return `backup/${year}_${month}_${day}`;
+  }
+
   /**
    * Read DDL content from storage or fallback to file
    * @param {string} env - Environment
@@ -68,9 +77,99 @@ module.exports = class MigratorService {
       return await this.storage.getDDL(env, this.getDBName(env), type, name);
     }
 
-    // Fallback: FileManager
     const folder = `db/${env}/${this.getDBName(env)}/${type}`;
     return this.fileManager.readFromFile(folder, `${name}.sql`);
+  }
+
+  /**
+   * Fetch DDL live from database connection
+   */
+  async fetchDDLLive(connection, type, name) {
+    try {
+      let query = '';
+      let field = '';
+
+      switch (type.toLowerCase()) {
+        case TABLES:
+          query = `SHOW CREATE TABLE \`${name}\``;
+          field = 'Create Table';
+          break;
+        case PROCEDURES:
+          query = `SHOW CREATE PROCEDURE \`${name}\``;
+          field = 'Create Procedure';
+          break;
+        case FUNCTIONS:
+          query = `SHOW CREATE FUNCTION \`${name}\``;
+          field = 'Create Function';
+          break;
+        case VIEWS:
+          query = `SHOW CREATE VIEW \`${name}\``;
+          field = 'Create View';
+          break;
+        case TRIGGERS:
+          query = `SHOW CREATE TRIGGER \`${name}\``;
+          field = 'SQL Original Statement';
+          break;
+        default:
+          return null;
+      }
+
+      const promiseConn = connection.promise ? connection.promise() : connection;
+      const [rows] = await promiseConn.query(query);
+      if (rows && rows[0]) {
+        let content = rows[0][field];
+        // Special handling for triggers in some MySQL versions
+        if (!content && type.toUpperCase() === TRIGGERS) {
+          content = rows[0]['Create Trigger'];
+        }
+        return content;
+      }
+      return null;
+    } catch (err) {
+      if (global.logger) global.logger.dev(`[Migrator] Live fetch failed for ${type} ${name}: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Save pre-migration snapshot to both File and Storage
+   * @param {string} env - Destination environment
+   * @param {string} type - DDL type
+   * @param {string} name - DDL name
+   * @param {object} [connection=null] - Optional connection to fetch live
+   */
+  async savePreMigrationSnapshot(env, type, name, connection = null) {
+    const dbName = this.getDBName(env);
+
+    // 1. Try Live Fetch (most accurate for pre-migration)
+    let currentDDL = null;
+    if (connection) {
+      currentDDL = await this.fetchDDLLive(connection, type, name);
+    }
+
+    // 2. Fallback to Cache
+    if (!currentDDL) {
+      currentDDL = await this.readDDL(env, type, name);
+    }
+
+    if (!currentDDL) return;
+
+    // 1. Save to File Backup
+    const backupFolder = `db/${env}/${dbName}/${this.getBackupFolder()}/${type}`;
+    this.fileManager.makeSureFolderExisted(backupFolder);
+    this.fileManager.saveToFile(backupFolder, `${name}.sql`, currentDDL);
+
+    // 2. Save to Storage Snapshot (SQLite)
+    if (this.storage && this.storage.saveSnapshot) {
+      await this.storage.saveSnapshot({
+        environment: env,
+        database: dbName,
+        type,
+        name,
+        content: currentDDL,
+        versionTag: `pre-migration-${this.getBackupFolder().split('/').pop()}`
+      });
+    }
   }
 
   /**
@@ -108,7 +207,7 @@ module.exports = class MigratorService {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${FUNCTIONS}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${FUNCTIONS}`;
-    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${FUNCTIONS}`;
+    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${this.getBackupFolder()}/${FUNCTIONS}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
 
     try {
@@ -134,6 +233,9 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             if (global.logger) global.logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
+            // Save snapshot before dropping
+            await this.savePreMigrationSnapshot(dbConfig.envName, FUNCTIONS, functionName, promiseConn);
+
             await promiseConn.query(dropQuery);
             if (global.logger) global.logger.warn('Dropped...', functionName);
 
@@ -144,6 +246,13 @@ module.exports = class MigratorService {
             if (global.logger) global.logger.info('Created...', functionName, '\n');
 
             if (this.storage) {
+              await this.storage.saveDDL({
+                environment: dbConfig.envName,
+                database: this.getDBName(dbConfig.envName),
+                type: FUNCTIONS,
+                name: functionName,
+                content: this.replaceWithEnv(importQuery, dbConfig.envName)
+              });
               await this.storage.saveMigration({
                 srcEnv,
                 destEnv: dbConfig.envName,
@@ -202,7 +311,7 @@ module.exports = class MigratorService {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${PROCEDURES}`;
-    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${PROCEDURES}`;
+    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${this.getBackupFolder()}/${PROCEDURES}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
     try {
       const spFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${PROCEDURES}`;
@@ -228,6 +337,9 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
+            // Save snapshot before dropping
+            await this.savePreMigrationSnapshot(dbConfig.envName, PROCEDURES, procedureName, promiseConn);
+
             await promiseConn.query(dropQuery);
             logger.warn('Dropped...', procedureName);
             if (this.isNotMigrateCondition(procedureName)) {
@@ -238,6 +350,13 @@ module.exports = class MigratorService {
             logger.info('Created...', procedureName, '\n');
 
             if (this.storage) {
+              await this.storage.saveDDL({
+                environment: dbConfig.envName,
+                database: this.getDBName(dbConfig.envName),
+                type: PROCEDURES,
+                name: procedureName,
+                content: this.replaceWithEnv(importQuery, dbConfig.envName)
+              });
               await this.storage.saveMigration({
                 srcEnv,
                 destEnv: dbConfig.envName,
@@ -284,7 +403,7 @@ module.exports = class MigratorService {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${TRIGGERS}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${TRIGGERS}`;
-    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${TRIGGERS}`;
+    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${this.getBackupFolder()}/${TRIGGERS}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
     try {
       const triggerFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${TRIGGERS}`;
@@ -306,12 +425,21 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             if (global.logger) global.logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
+            // Save snapshot before dropping
+            await this.savePreMigrationSnapshot(dbConfig.envName, TRIGGERS, triggerName, promiseConn);
+
             await promiseConn.query(dropQuery);
             if (global.logger) global.logger.warn('Dropped...', triggerName);
             await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
             if (global.logger) global.logger.info('Created...', triggerName, '\n');
-            // Log to storage
             if (this.storage) {
+              await this.storage.saveDDL({
+                environment: dbConfig.envName,
+                database: this.getDBName(dbConfig.envName),
+                type: TRIGGERS,
+                name: triggerName,
+                content: this.replaceWithEnv(importQuery, dbConfig.envName)
+              });
               await this.storage.saveMigration({
                 srcEnv,
                 destEnv: dbConfig.envName,
@@ -382,6 +510,9 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('Experimental Run::', { dropQuery });
           } else {
+            // Save snapshot before dropping
+            await this.savePreMigrationSnapshot(dbConfig.envName, FUNCTIONS, functionName, promiseConn);
+
             await promiseConn.query(dropQuery);
             logger.warn('Dropped...', functionName);
             if (this.storage) {
@@ -452,6 +583,9 @@ module.exports = class MigratorService {
             logger.warn('Experimental Run::', { dropQuery });
           } else {
             logger.warn('Dropped...', procedureName);
+            // Save snapshot before dropping
+            await this.savePreMigrationSnapshot(dbConfig.envName, PROCEDURES, procedureName, promiseConn);
+
             await promiseConn.query(dropQuery);
             if (this.storage) {
               await this.storage.saveMigration({
@@ -512,6 +646,9 @@ module.exports = class MigratorService {
         if (+process.env.EXPERIMENTAL === 1) {
           logger.warn('Experimental Run::', { dropQuery });
         } else {
+          // Save snapshot before dropping
+          await this.savePreMigrationSnapshot(dbConfig.envName, TRIGGERS, triggerName, promiseConn);
+
           await util.promisify(destConnection.query).call(destConnection, dropQuery);
           logger.warn('Dropped...', triggerName);
           // Log to storage
@@ -564,7 +701,7 @@ module.exports = class MigratorService {
     const srcEnv = this.getSourceEnv(dbConfig.envName);
     const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${VIEWS}`;
     const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${VIEWS}`;
-    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${_backupFolder}/${VIEWS}`;
+    const backupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${this.getBackupFolder()}/${VIEWS}`;
     this.fileManager.makeSureFolderExisted(backupFolder);
     try {
       const viewFolder = `map-migrate/${srcEnv}-to-${dbConfig.envName}/${this.getDBName(srcEnv)}/${VIEWS}`;
@@ -592,6 +729,9 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             if (global.logger) global.logger.warn('Experimental Run::', { dropQuery, importQuery });
           } else {
+            // Save snapshot before dropping
+            await this.savePreMigrationSnapshot(dbConfig.envName, VIEWS, viewName, promiseConn);
+
             // Drop
             await promiseConn.query(dropQuery);
             if (global.logger) global.logger.warn('Dropped...', viewName);
@@ -600,16 +740,13 @@ module.exports = class MigratorService {
             await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
             if (global.logger) global.logger.info('Created...', viewName);
 
-            // Log to storage
             if (this.storage) {
-              await this.storage.saveMigration({
-                srcEnv,
-                destEnv: dbConfig.envName,
-                database: this.getDBName(srcEnv),
+              await this.storage.saveDDL({
+                environment: dbConfig.envName,
+                database: this.getDBName(dbConfig.envName),
                 type: VIEWS,
                 name: viewName,
-                operation: fromList === DEPRECATED ? 'DROP' : 'CREATE',
-                status: 'SUCCESS'
+                content: this.replaceWithEnv(importQuery, dbConfig.envName)
               });
             }
             // copy to backup & soft migrate
@@ -667,6 +804,9 @@ module.exports = class MigratorService {
         if (+process.env.EXPERIMENTAL === 1) {
           logger.warn('Experimental Run::', { dropQuery });
         } else {
+          // Save snapshot before dropping
+          await this.savePreMigrationSnapshot(dbConfig.envName, VIEWS, viewName, destConnection);
+
           await util.promisify(destConnection.query).call(destConnection, dropQuery);
           logger.warn('Dropped...', viewName);
           // Log to storage
@@ -681,9 +821,9 @@ module.exports = class MigratorService {
               status: 'SUCCESS'
             });
           }
-          // soft delete
-          this.fileManager.removeFile(destFolder, `${viewName}.sql`);
         }
+        // soft delete
+        this.fileManager.removeFile(destFolder, `${viewName}.sql`);
       }
       // Clean up the view list after migration (only if not single migration)
       if (!viewName) {
@@ -740,6 +880,7 @@ module.exports = class MigratorService {
 
       if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
+        await promiseConn.query('SET FOREIGN_KEY_CHECKS = 0;');
       }
       try {
         for (const tableName of tableNames) {
@@ -757,10 +898,17 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             if (global.logger) global.logger.warn('Experimental Run::', { importQuery });
           } else {
-            await promiseConn.query(importQuery);
+            await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
             if (global.logger) global.logger.info('Created...', tableName, '\n');
 
             if (this.storage) {
+              await this.storage.saveDDL({
+                environment: dbConfig.envName,
+                database: this.getDBName(dbConfig.envName),
+                type: TABLES,
+                name: tableName,
+                content: this.replaceWithEnv(importQuery, dbConfig.envName)
+              });
               await this.storage.saveMigration({
                 srcEnv,
                 destEnv: dbConfig.envName,
@@ -770,6 +918,10 @@ module.exports = class MigratorService {
                 operation: 'CREATE',
                 status: 'SUCCESS'
               });
+            } else {
+              const srcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${TABLES}`;
+              const destFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${TABLES}`;
+              this.fileManager.copyFile(path.join(srcFolder, `${tableName}.sql`), path.join(destFolder, `${tableName}.sql`));
             }
           }
           tablesMigrated++;
@@ -778,11 +930,13 @@ module.exports = class MigratorService {
           this.fileManager.saveToFile(tblFolder, tblList, '');
         }
         if (!(process.env.EXPERIMENTAL >= 1)) {
+          await promiseConn.query('SET FOREIGN_KEY_CHECKS = 1;');
           await promiseConn.commit();
         }
         return tablesMigrated;
       } catch (err) {
         if (!(process.env.EXPERIMENTAL >= 1)) {
+          await promiseConn.query('SET FOREIGN_KEY_CHECKS = 1;');
           await promiseConn.rollback();
         }
         if (global.logger) global.logger.error(`Error during table migration:`, err);
@@ -820,6 +974,7 @@ module.exports = class MigratorService {
 
       if (!(process.env.EXPERIMENTAL >= 1)) {
         await promiseConn.beginTransaction();
+        await promiseConn.query('SET FOREIGN_KEY_CHECKS = 0;');
       }
       try {
         for (const tableName of tableNames) {
@@ -870,12 +1025,21 @@ module.exports = class MigratorService {
           if (+process.env.EXPERIMENTAL === 1) {
             logger.warn('::Experimental Run::', { tableName, alterStatements });
           } else {
-            for (const query of alterStatements) {
-              await promiseConn.query(query);
-            }
-            if (global.logger) global.logger.info('Updated...', tableName);
+            // Save snapshot before altering
+            await this.savePreMigrationSnapshot(dbConfig.envName, TABLES, tableName, promiseConn);
 
+            for (const query of alterStatements) {
+              await promiseConn.query(this.replaceWithEnv(query, dbConfig.envName));
+            }
             if (this.storage) {
+              const newDDL = await this.readDDL(srcEnv, TABLES, tableName);
+              await this.storage.saveDDL({
+                environment: dbConfig.envName,
+                database: this.getDBName(dbConfig.envName),
+                type: TABLES,
+                name: tableName,
+                content: this.replaceWithEnv(newDDL, dbConfig.envName)
+              });
               await this.storage.saveMigration({
                 srcEnv,
                 destEnv: dbConfig.envName,
@@ -885,6 +1049,14 @@ module.exports = class MigratorService {
                 operation: 'ALTER',
                 status: 'SUCCESS'
               });
+            } else {
+              const dsSrcFolder = `db/${srcEnv}/${this.getDBName(srcEnv)}/${TABLES}`;
+              const dsDestFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${TABLES}`;
+              const dsBackupFolder = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}/${this.getBackupFolder()}/${TABLES}`;
+              const fileName = `${tableName}.sql`;
+              this.fileManager.makeSureFolderExisted(dsBackupFolder);
+              this.fileManager.copyFile(path.join(dsDestFolder, fileName), path.join(dsBackupFolder, fileName));
+              this.fileManager.copyFile(path.join(dsSrcFolder, fileName), path.join(dsDestFolder, fileName));
             }
 
             // Clean up files if they exist
@@ -897,11 +1069,13 @@ module.exports = class MigratorService {
         }
 
         if (!(process.env.EXPERIMENTAL >= 1)) {
+          await promiseConn.query('SET FOREIGN_KEY_CHECKS = 1;');
           await promiseConn.commit();
         }
         return tablesAltered;
       } catch (err) {
         if (!(process.env.EXPERIMENTAL >= 1)) {
+          await promiseConn.query('SET FOREIGN_KEY_CHECKS = 1;');
           await promiseConn.rollback();
         }
         if (global.logger) global.logger.error(`Error during table alteration:`, err);

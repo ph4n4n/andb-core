@@ -521,7 +521,7 @@ module.exports = class ComparatorService {
             if (alterResult.columns) alterStatements.push(alterResult.columns);
             if (alterResult.indexes) alterStatements.push(alterResult.indexes);
             if (alterResult.deprecated) alterStatements.push(alterResult.deprecated);
-            
+
             // Also generate files if needed for reportDLLChange compatibility
             await this.generateTableAlterFiles([ddlName], srcEnv, destEnv, reportDDLFolder);
           }
@@ -590,7 +590,7 @@ module.exports = class ComparatorService {
         alterIndexesList.push(tableName);
         this.writeAlter(destEnv, tableName, 'indexes', alterResult.indexes);
       }
-      
+
       if (alterResult.deprecated && alterResult.deprecated.length > 0) {
         this.writeAlter(destEnv, tableName, 'deprecated', alterResult.deprecated);
       }
@@ -692,11 +692,9 @@ module.exports = class ComparatorService {
 
       if (global.logger) global.logger.info('Comparing triggers...', srcLines.length, '->', destLines.length, specificName ? `(${specificName})` : '');
 
-      await this.handleTriggerComparison(srcEnv, destEnv, mapMigrateFolder, specificName);
-
-      const newTriggers = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, 'triggers', destEnv);
+      const newTriggers = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
       const updatedTriggers = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
-      const deprecatedTriggers = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers');
+      const deprecatedTriggers = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
 
       await this.generateReports(destEnv, { ...newTriggers, ...deprecatedTriggers, ...updatedTriggers });
     } catch (error) {
