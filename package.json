@@ -46,7 +46,7 @@
     "mysql"
   ],
   "author": "ph4n4n",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "bugs": {
     "url": "https://github.com/ph4n4n/andb-core/issues"
   },
