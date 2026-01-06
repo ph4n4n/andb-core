@@ -45,6 +45,26 @@ class StorageStrategy {
     throw new Error('getDDLList must be implemented');
   }
 
+  async saveComparison(comparison) {
+    throw new Error('saveComparison must be implemented');
+  }
+
+  async getComparisons(srcEnv, destEnv, database, type) {
+    throw new Error('getComparisons must be implemented');
+  }
+
+  async getStats() {
+    throw new Error('getStats must be implemented');
+  }
+
+  async getEnvironments() {
+    throw new Error('getEnvironments must be implemented');
+  }
+
+  async getDatabases(environment) {
+    throw new Error('getDatabases must be implemented');
+  }
+
   /**
    * Save batch export data
    * @param {string} env 
@@ -279,6 +299,7 @@ class SQLiteStorage extends StorageStrategy {
     this.dbPath = dbPath;
     this.baseDir = baseDir;
     this.db = null;
+    this.repositories = {};
     this.initDatabase();
   }
 
@@ -286,108 +307,59 @@ class SQLiteStorage extends StorageStrategy {
     const Database = require('better-sqlite3');
     this.db = new Database(this.dbPath);
 
+    // Initialize repositories
+    const DDLRepository = require('../storage/repositories/ddl.repository');
+    const ComparisonRepository = require('../storage/repositories/comparison.repository');
+    const SnapshotRepository = require('../storage/repositories/snapshot.repository');
+    const MigrationRepository = require('../storage/repositories/migration.repository');
+
+    this.repositories.ddl = new DDLRepository(this.db);
+    this.repositories.comparison = new ComparisonRepository(this.db);
+    this.repositories.snapshot = new SnapshotRepository(this.db);
+    this.repositories.migration = new MigrationRepository(this.db);
+
     // Load schema
     const fs = require('fs');
     const schemaPath = path.join(__dirname, '../storage/schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf-8');
-    this.db.exec(schema);
+    if (fs.existsSync(schemaPath)) {
+      const schema = fs.readFileSync(schemaPath, 'utf-8');
+      this.db.exec(schema);
+    }
+  }
+
+  normalize(val) {
+    return this.repositories.ddl.normalize(val);
   }
 
   async saveDDL(data) {
-    const { environment, database, type, name, content } = data;
-
-    const stmt = this.db.prepare(`
-      INSERT INTO ddl_exports (environment, database_name, ddl_type, ddl_name, ddl_content, checksum)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(environment, database_name, ddl_type, ddl_name) 
-      DO UPDATE SET 
-        ddl_content = excluded.ddl_content,
-        checksum = excluded.checksum,
-        updated_at = CURRENT_TIMESTAMP,
-        exported_to_file = 0
-    `);
-
-    const crypto = require('crypto');
-    const checksum = crypto.createHash('md5').update(content).digest('hex');
-
-    stmt.run(environment, database, type, name, content, checksum);
-    return true;
+    return this.repositories.ddl.save(data);
   }
 
   async getDDL(environment, database, type, name) {
-    const stmt = this.db.prepare(`
-      SELECT ddl_content FROM ddl_exports
-      WHERE environment = ? AND database_name = ? AND ddl_type = ? AND ddl_name = ?
-    `);
-
-    const result = stmt.get(environment, database, type, name);
-    return result ? result.ddl_content : null;
+    const entity = await this.repositories.ddl.findOne(environment, database, type, name);
+    return entity ? entity.ddl_content : null;
   }
 
   async getDDLList(environment, database, type) {
-    const stmt = this.db.prepare(`
-      SELECT ddl_name FROM ddl_exports
-      WHERE environment = ? AND database_name = ? AND ddl_type = ?
-      ORDER BY ddl_name
-    `);
-
-    const results = stmt.all(environment, database, type);
-    return results.map(r => r.ddl_name);
+    return this.repositories.ddl.listNames(environment, database, type);
   }
 
-  async saveExport(env, database, type, data) {
-    const crypto = require('crypto');
-    const stmt = this.db.prepare(`
-      INSERT INTO ddl_exports (environment, database_name, ddl_type, ddl_name, ddl_content, checksum)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(environment, database_name, ddl_type, ddl_name) 
-      DO UPDATE SET 
-        ddl_content = excluded.ddl_content,
-        checksum = excluded.checksum,
-        updated_at = CURRENT_TIMESTAMP,
-        exported_to_file = 0
-    `);
-
-    const transaction = this.db.transaction((items) => {
-      for (const item of items) {
-        const checksum = crypto.createHash('md5').update(item.ddl).digest('hex');
-        stmt.run(env, database, type, item.name, item.ddl, checksum);
-      }
-    });
-
-    transaction(data);
-    return true;
+  async saveExport(environment, database, type, data) {
+    return this.repositories.ddl.saveBatch(environment, database, type, data);
   }
 
   async getExport(env, database, type) {
-    const stmt = this.db.prepare(`
-      SELECT ddl_name as name, ddl_content as ddl FROM ddl_exports
-      WHERE environment = ? AND database_name = ? AND ddl_type = ?
-      ORDER BY ddl_name
-    `);
-    return stmt.all(env, database, type);
+    // This one wasn't in the new repo yet, adding it to DDL repo or keeping here
+    // Let's add it to DDL repository for consistency
+    return this.repositories.ddl.listObjects(env, database, type);
   }
 
   async saveMigration(migration) {
-    const { srcEnv, destEnv, database, type, name, operation, status, error } = migration;
-    const stmt = this.db.prepare(`
-      INSERT INTO migration_history (
-        src_environment, dest_environment, database_name, 
-        ddl_type, ddl_name, operation, status, error_message
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(srcEnv, destEnv, database, type, name, operation, status, error || null);
-    return true;
+    return this.repositories.migration.save(migration);
   }
 
   async getMigrationHistory(limit = 100) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM migration_history 
-      ORDER BY executed_at DESC 
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    return this.repositories.migration.list(limit);
   }
 
   async logAction(actionType, status, details) {
@@ -400,76 +372,76 @@ class SQLiteStorage extends StorageStrategy {
   }
 
   async saveSnapshot(data) {
-    const { environment, database, type, name, content, versionTag } = data;
-    const crypto = require('crypto');
-    const checksum = crypto.createHash('md5').update(content || '').digest('hex');
-
-    const stmt = this.db.prepare(`
-      INSERT INTO ddl_snapshots (environment, database_name, ddl_type, ddl_name, ddl_content, checksum, version_tag)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(environment, database, type, name, content, checksum, versionTag || null);
-    return true;
+    return this.repositories.snapshot.save(data);
   }
 
   async getSnapshots(environment, database, type, name) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM ddl_snapshots
-      WHERE environment = ? AND database_name = ? AND ddl_type = ? AND ddl_name = ?
-      ORDER BY created_at DESC
-    `);
-    return stmt.all(environment, database, type, name);
+    return this.repositories.snapshot.findByObject(environment, database, type, name);
   }
 
   async getAllSnapshots(limit = 100) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM ddl_snapshots
-      ORDER BY created_at DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    return this.repositories.snapshot.listLatest(limit);
   }
 
   async saveComparison(comparison) {
-    const { srcEnv, destEnv, database, type, name, status, alterStatements, diffSummary } = comparison;
-
-    const stmt = this.db.prepare(`
-      INSERT INTO comparisons 
-        (src_environment, dest_environment, database_name, ddl_type, ddl_name, status, 
-         alter_statements, diff_summary)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(src_environment, dest_environment, database_name, ddl_type, ddl_name)
-      DO UPDATE SET 
-        status = excluded.status,
-        alter_statements = excluded.alter_statements,
-        diff_summary = excluded.diff_summary,
-        updated_at = CURRENT_TIMESTAMP,
-        exported_to_file = 0
-    `);
-
-    const alterJSON = alterStatements ? JSON.stringify(alterStatements) : null;
-    stmt.run(srcEnv, destEnv, database, type, name, status, alterJSON, diffSummary);
-    return true;
+    return this.repositories.comparison.save(comparison);
   }
 
   async getComparisons(srcEnv, destEnv, database, type) {
-    const stmt = this.db.prepare(`
-      SELECT ddl_name as name, status, ddl_type as type, alter_statements, diff_summary
-      FROM comparisons
-      WHERE src_environment = ? AND dest_environment = ? 
-        AND database_name = ? AND ddl_type = ?
-      ORDER BY status, ddl_name
-    `);
+    return this.repositories.comparison.find(srcEnv, destEnv, database, type);
+  }
 
-    const results = stmt.all(srcEnv, destEnv, database, type);
-    return results.map(r => ({
-      name: r.name,
-      status: r.status,
-      type: r.type.toLowerCase(),
-      alterStatements: r.alter_statements ? JSON.parse(r.alter_statements) : null,
-      diffSummary: r.diff_summary
-    }));
+  async getDDLObjects(environment, database, type) {
+    return this.repositories.ddl.listObjects(environment, database, type);
+  }
+
+  async getLatestComparisons(limit = 50) {
+    return this.repositories.comparison.getLatest(limit);
+  }
+
+  async getEnvironments() {
+    return this.repositories.ddl.getEnvironments();
+  }
+
+  async getDatabases(environment) {
+    return this.repositories.ddl.getDatabases(environment);
+  }
+
+  async getLastUpdated(environment, database) {
+    return this.repositories.ddl.getLastUpdated(environment, database);
+  }
+
+  async clearDataForConnection(environment, database) {
+    return this.repositories.ddl.clearConnectionData(environment, database);
+  }
+
+  async clearAll() {
+    this.repositories.ddl.deleteAll();
+    this.repositories.comparison.deleteAll();
+    this.repositories.snapshot.deleteAll();
+    this.repositories.migration.deleteAll();
+    this.db.prepare('DELETE FROM storage_actions').run();
+  }
+
+  async getStats() {
+    const stats = {
+      ddlExports: await this.repositories.ddl.count(),
+      comparisons: await this.repositories.comparison.count(),
+      snapshots: await this.repositories.snapshot.count(),
+      dbPath: this.dbPath
+    };
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(this.dbPath)) {
+        // @ts-ignore
+        stats.dbSize = fs.statSync(this.dbPath).size;
+      }
+    } catch (e) { }
+    return stats;
+  }
+
+  async getComparisonsByStatus(srcEnv, destEnv, database, type, status) {
+    return this.repositories.comparison.findByStatus(srcEnv, destEnv, database, type, status);
   }
 
   async exportToFiles() {

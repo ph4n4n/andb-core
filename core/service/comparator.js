@@ -254,14 +254,25 @@ module.exports = class ComparatorService {
   compareIndexes(srcTableDefinition, destTableDefinition) {
     const alterIndexes = [];
 
-    // Check if any indexes are missing in the destination table
+    // 1. Check for new or changed indexes
     for (const indexName in srcTableDefinition.indexes) {
+      const srcDef = srcTableDefinition.indexes[indexName].replace(/,$/, '').trim();
+
       if (!destTableDefinition.indexes[indexName]) {
-        alterIndexes.push(`ADD ${srcTableDefinition.indexes[indexName]}`);
+        // New index
+        alterIndexes.push(`ADD ${srcDef}`);
+      } else {
+        // Existing index - check if definition changed
+        const destDef = destTableDefinition.indexes[indexName].replace(/,$/, '').trim();
+        if (srcDef !== destDef) {
+          // Changed - Drop then Add
+          alterIndexes.push(`DROP INDEX \`${indexName}\``);
+          alterIndexes.push(`ADD ${srcDef}`);
+        }
       }
     }
 
-    // Check if any indexes are missing in the source table (deprecated)
+    // 2. Check for deprecated indexes (only in target)
     for (const indexName in destTableDefinition.indexes) {
       if (!srcTableDefinition.indexes[indexName]) {
         alterIndexes.push(`DROP INDEX \`${indexName}\``);
@@ -413,13 +424,16 @@ module.exports = class ComparatorService {
     if (this.storage) {
       if (newLines.length > 0) {
         for (const ddlName of newLines) {
+          if (!ddlName) continue;
+          const srcContent = await this.storage.getDDL(srcEnv, this.getDBName(srcEnv), ddlType, ddlName);
           await this.storage.saveComparison({
             srcEnv,
             destEnv,
             database: this.getDBName(srcEnv),
             type: ddlType,
             name: ddlName,
-            status: 'new'
+            status: 'new',
+            alterStatements: srcContent // For NEW, the "alter" is the full CREATE
           });
         }
       }
@@ -503,7 +517,22 @@ module.exports = class ComparatorService {
     const equalLines = [];
     const checkChanged = this.findDDLChanged2Migrate(srcEnv, ddlType, destEnv);
     for (const ddlName of existedDDL) {
-      if (await checkChanged(ddlName)) {
+      let hasRealChange = await checkChanged(ddlName);
+
+      // For Tables, even if string diff exists, check if there's actual ALTER logic
+      // This avoids "ghost" updates caused by index reordering
+      if (hasRealChange && ddlType === TABLES) {
+        const alterResult = await this.checkDiffAndGenAlter(ddlName, destEnv);
+        const hasAlter = (alterResult.columns && alterResult.columns.length > 0) ||
+          (alterResult.indexes && alterResult.indexes.length > 0) ||
+          (alterResult.deprecated && alterResult.deprecated.length > 0);
+
+        if (!hasAlter) {
+          hasRealChange = false;
+        }
+      }
+
+      if (hasRealChange) {
         updatedLines.push(ddlName);
       } else {
         equalLines.push(ddlName);
@@ -514,6 +543,7 @@ module.exports = class ComparatorService {
     if (this.storage) {
       if (updatedLines.length > 0) {
         for (const ddlName of updatedLines) {
+          if (!ddlName) continue;
           let alterStatements = null;
           if (ddlType === TABLES) {
             const alterResult = await this.checkDiffAndGenAlter(ddlName, destEnv);
@@ -522,8 +552,10 @@ module.exports = class ComparatorService {
             if (alterResult.indexes) alterStatements.push(alterResult.indexes);
             if (alterResult.deprecated) alterStatements.push(alterResult.deprecated);
 
-            // Also generate files if needed for reportDLLChange compatibility
             await this.generateTableAlterFiles([ddlName], srcEnv, destEnv, reportDDLFolder);
+          } else {
+            // For non-tables, the whole content changed
+            alterStatements = await this.storage.getDDL(srcEnv, this.getDBName(srcEnv), ddlType, ddlName);
           }
 
           await this.storage.saveComparison({
@@ -620,8 +652,12 @@ module.exports = class ComparatorService {
 
       if (!srcContent || !destContent) return false;
 
-      const cleanSrc = srcContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
-      const cleanDest = destContent.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
+      // Ensure we have strings (especially when coming from Entities)
+      const srcStr = srcContent.toString();
+      const destStr = destContent.toString();
+
+      const cleanSrc = srcStr.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
+      const cleanDest = destStr.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
 
       if (cleanSrc !== cleanDest) {
         if (global.logger) {

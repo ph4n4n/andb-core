@@ -341,13 +341,13 @@ module.exports = class MigratorService {
             await this.savePreMigrationSnapshot(dbConfig.envName, PROCEDURES, procedureName, promiseConn);
 
             await promiseConn.query(dropQuery);
-            logger.warn('Dropped...', procedureName);
+            if (global.logger) global.logger.warn('Dropped...', procedureName);
             if (this.isNotMigrateCondition(procedureName)) {
               continue;
             }
 
             await promiseConn.query(this.replaceWithEnv(importQuery, dbConfig.envName));
-            logger.info('Created...', procedureName, '\n');
+            if (global.logger) global.logger.info('Created...', procedureName, '\n');
 
             if (this.storage) {
               await this.storage.saveDDL({
@@ -641,16 +641,17 @@ module.exports = class MigratorService {
       await util.promisify(destConnection.beginTransaction).call(destConnection);
     }
     try {
+      const promiseConn = destConnection.promise ? destConnection.promise() : destConnection;
       for (const triggerName of triggerNames) {
         const dropQuery = `DROP TRIGGER IF EXISTS \`${triggerName}\`;`;
         if (+process.env.EXPERIMENTAL === 1) {
-          logger.warn('Experimental Run::', { dropQuery });
+          if (global.logger) global.logger.warn('Experimental Run::', { dropQuery });
         } else {
           // Save snapshot before dropping
           await this.savePreMigrationSnapshot(dbConfig.envName, TRIGGERS, triggerName, promiseConn);
 
-          await util.promisify(destConnection.query).call(destConnection, dropQuery);
-          logger.warn('Dropped...', triggerName);
+          await promiseConn.query(dropQuery);
+          if (global.logger) global.logger.warn('Dropped...', triggerName);
           // Log to storage
           if (this.storage) {
             await this.storage.saveMigration({
@@ -1236,12 +1237,10 @@ module.exports = class MigratorService {
             if (listType === NEW) {
               rs = await this.migrateTables(destConnection, dbConfig, specificName);
             } else if (listType === UPDATED) {
-              if (this.storage) {
-                rs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
-              } else {
-                rs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
-                rs += await this.alterTableColumns(destConnection, dbConfig, 'indexes', specificName);
-              }
+              // Priority: Always process both column and index alters when using centralized storage
+              const colRs = await this.alterTableColumns(destConnection, dbConfig, 'columns', specificName);
+              const idxRs = await this.alterTableColumns(destConnection, dbConfig, 'indexes', specificName);
+              rs = (colRs || 0) + (idxRs || 0);
             }
             if (global.logger) global.logger.info(`Migration of ${ddl} ${env} done in:: ${Date.now() - start}ms`);
             break;

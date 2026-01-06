@@ -1,5 +1,12 @@
 // Mock alog globally
-global.logger = { error: jest.fn(), warning: jest.fn(), info: jest.fn(), dev: jest.fn() };
+global.logger = {
+  error: jest.fn(),
+  warn: jest.fn(),
+  warning: jest.fn(),
+  info: jest.fn(),
+  dev: jest.fn(),
+  success: jest.fn()
+};
 const MigratorService = require('../core/service/migrator');
 
 const mockFileManager = {
@@ -63,21 +70,22 @@ describe('MigratorService', () => {
     mockFileManager.readFromFile.mockReturnValueOnce('CREATE FUNCTION func1() RETURNS INT BEGIN RETURN 1; END;');
     mockFileManager.readFromFile.mockReturnValueOnce('DROP FUNCTION IF EXISTS `func2`;');
     mockFileManager.readFromFile.mockReturnValueOnce('CREATE FUNCTION func2() RETURNS INT BEGIN RETURN 2; END;');
-    
+
     const mockConnection = {
-      beginTransaction: jest.fn(),
-      query: jest.fn().mockImplementation((sql, cb) => cb(null, [])),
-      commit: jest.fn(),
-      rollback: jest.fn(),
+      beginTransaction: jest.fn().mockResolvedValue(),
+      query: jest.fn().mockResolvedValue([[], []]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
     };
+    mockConnection.promise = jest.fn(() => mockConnection);
     const dbConfig = { envName: 'UAT' };
-    
+
     const result = await migrator.migrateFunctions(mockConnection, dbConfig, 'NEW');
-    
+
     expect(mockFileManager.makeSureFolderExisted).toHaveBeenCalled();
     expect(mockFileManager.readFromFile).toHaveBeenCalledWith(
-      'map-migrate/DEV-to-UAT/mockdb/functions', 
-      'NEW.list', 
+      'map-migrate/DEV-to-UAT/mockdb/functions',
+      'NEW.list',
       1
     );
     expect(typeof result).toBe('number');
@@ -91,21 +99,22 @@ describe('MigratorService', () => {
     mockFileManager.readFromFile.mockReturnValueOnce('CREATE PROCEDURE proc1() BEGIN SELECT 1; END;');
     mockFileManager.readFromFile.mockReturnValueOnce('DROP PROCEDURE IF EXISTS `proc1`;');
     mockFileManager.readFromFile.mockReturnValueOnce('CREATE PROCEDURE proc1() BEGIN SELECT 1; END;');
-    
+
     const mockConnection = {
-      beginTransaction: jest.fn(),
-      query: jest.fn().mockImplementation((sql, cb) => cb(null, [])),
-      commit: jest.fn(),
-      rollback: jest.fn(),
+      beginTransaction: jest.fn().mockResolvedValue(),
+      query: jest.fn().mockResolvedValue([[], []]),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
     };
+    mockConnection.promise = jest.fn(() => mockConnection);
     const dbConfig = { envName: 'UAT' };
-    
+
     const result = await migrator.migrateProcedures(mockConnection, dbConfig, 'NEW');
-    
+
     expect(mockFileManager.makeSureFolderExisted).toHaveBeenCalled();
     expect(mockFileManager.readFromFile).toHaveBeenCalledWith(
-      'map-migrate/DEV-to-UAT/mockdb/procedures', 
-      'NEW.list', 
+      'map-migrate/DEV-to-UAT/mockdb/procedures',
+      'NEW.list',
       1
     );
     expect(typeof result).toBe('number');

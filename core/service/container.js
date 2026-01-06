@@ -12,7 +12,8 @@
 const [EXPORTER, COMPARATOR, MIGRATOR, MONITOR,
   REPORT_HELPER, FILE_MANAGER, DB_UTIL_FN, BASE_DIR, STORAGE,
 ] = [
-    'exporter', 'comparator', 'migrator', 'monitor', 'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir', 'storage'
+    'exporter', 'comparator', 'migrator', 'monitor',
+    'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir', 'storage'
   ];
 const ExporterService = require('./exporter');
 const ComparatorService = require('./comparator');

@@ -74,7 +74,7 @@ describe('Container DI System', () => {
     const exporter = container.get('exporter');
     expect(typeof exporter).toBe('function');
     exporter('TABLES');
-    expect(mockExport).toHaveBeenCalledWith('TABLES');
+    expect(mockExport).toHaveBeenCalledWith('TABLES', null);
   });
 
   test('comparator returns function and calls correctly', () => {
@@ -82,7 +82,7 @@ describe('Container DI System', () => {
     const comparator = container.get('comparator');
     expect(typeof comparator).toBe('function');
     comparator('TABLES');
-    expect(mockCompare).toHaveBeenCalledWith('TABLES');
+    expect(mockCompare).toHaveBeenCalledWith('TABLES', null);
   });
 
   test('migrator returns function and calls correctly', () => {
@@ -90,7 +90,7 @@ describe('Container DI System', () => {
     const migrator = container.get('migrator');
     expect(typeof migrator).toBe('function');
     migrator('TABLES', 'status');
-    expect(mockMigrate).toHaveBeenCalledWith('TABLES', 'status');
+    expect(mockMigrate).toHaveBeenCalledWith('TABLES', 'status', null);
   });
 
   test('monitor returns function and calls correctly', () => {
@@ -123,4 +123,4 @@ describe('Container DI System', () => {
     const container = new Container(config);
     expect(() => container.getServices()).not.toThrow();
   });
-}); 
+});
