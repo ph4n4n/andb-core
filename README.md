@@ -25,12 +25,14 @@ andb migrate:new -p procedures
 ## 📚 Documentation
 
 ### 🇺🇸 English
+
 - 📖 [CLI Usage](docs/CLI_EN.md) - Complete CLI commands
 - 📖 [Script Generator](docs/GENERATOR_EN.md) - Auto-generate npm scripts
 - 📖 [Integration Guide](docs/INTEGRATION_EN.md) - Programmatic usage
 - 📖 [Examples](examples/) - Ready-to-use examples, please check [QUICKSTART](examples/basic-with-env/QUICKSTART.md) guild
 
-### 🇻🇳 Tiếng Việt  
+### 🇻🇳 Tiếng Việt
+
 - 📖 [Hướng dẫn CLI](docs/CLI.md) - Lệnh CLI đầy đủ
 - 📖 [Script Generator](docs/GENERATOR.md) - Tự động sinh npm scripts
 - 📖 [Hướng dẫn tích hợp](docs/INTEGRATION.md) - Sử dụng programmatic
@@ -49,7 +51,7 @@ ANDB_ENVIRONMENTS="DEV,STAGE,PROD" npm run generate
 
 # Generated scripts
 npm run export:dev:fn      # Export functions from DEV
-npm run compare:prod:sp    # Compare procedures in PROD  
+npm run compare:prod:sp    # Compare procedures in PROD
 npm run migrate:stage:new  # Migrate new objects to STAGE
 ```
 
@@ -115,6 +117,6 @@ PROD_DB_PASS=prod_password
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file
+AGPLv3 License - see [LICENSE](LICENSE) file
 
 ph4n4n
