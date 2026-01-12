@@ -60,7 +60,12 @@ module.exports = class Container {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
       const storage = container.get(STORAGE);
-      const migratorService = new MigratorService({ ...dbUtilFn, fileManager, storage });
+      const migratorService = new MigratorService({
+        ...dbUtilFn,
+        fileManager,
+        storage,
+        isNotMigrateCondition: this.config.isNotMigrateCondition
+      });
 
       return (ddl, status, name = null) => migratorService.migrate(ddl, status, name);
     });
