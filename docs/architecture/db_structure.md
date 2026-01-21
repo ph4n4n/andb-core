@@ -12,7 +12,7 @@ erDiagram
         integer id PK
         string environment "UPPERCASE (DEV, PROD...)"
         string database_name
-        string ddl_type "UPPERCASE (TABLES, PROCEDURES...)"
+        string ddl_type "UPPERCASE (TABLES, PROCEDURES, FUNCTIONS, TRIGGERS, EVENTS, VIEWS)"
         string ddl_name
         string ddl_content
         string checksum

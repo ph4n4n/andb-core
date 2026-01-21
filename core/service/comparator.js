@@ -11,10 +11,11 @@
  */
 const path = require('path');
 const {
-  DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS, VIEWS },
+  DDL: { FUNCTIONS, PROCEDURES, TABLES, TRIGGERS, VIEWS, EVENTS },
   DOMAIN_NORMALIZATION
 } = require('../configs/constants');
 const { diffWords } = require('diff');
+const { DDLParser } = require('../utils');
 
 module.exports = class ComparatorService {
   constructor(dependencies) {
@@ -659,7 +660,20 @@ module.exports = class ComparatorService {
       const cleanSrc = srcStr.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
       const cleanDest = destStr.replace(this.domainNormalization.pattern, this.domainNormalization.replacement);
 
-      if (cleanSrc !== cleanDest) {
+      let normalizedSrc = cleanSrc;
+      let normalizedDest = cleanDest;
+
+      // Use DDLParser for smarter normalization (Procedures, Functions, Views, Triggers, Events)
+      if ([PROCEDURES, FUNCTIONS, TRIGGERS, VIEWS, EVENTS].includes(ddlType)) {
+        const options = {
+          ignoreDefiner: true, // Always ignore definition for these types (avoids false diffs)
+          ignoreWhitespace: true // Improved check ignoring format differences
+        };
+        normalizedSrc = DDLParser.normalize(normalizedSrc, options);
+        normalizedDest = DDLParser.normalize(normalizedDest, options);
+      }
+
+      if (normalizedSrc !== normalizedDest) {
         if (global.logger) {
           global.logger.info('=======================================');
           this.logDiff(cleanSrc, cleanDest);
@@ -728,9 +742,9 @@ module.exports = class ComparatorService {
 
       if (global.logger) global.logger.info('Comparing triggers...', srcLines.length, '->', destLines.length, specificName ? `(${specificName})` : '');
 
-      const newTriggers = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
-      const updatedTriggers = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
-      const deprecatedTriggers = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, 'triggers', srcEnv, destEnv);
+      const newTriggers = await this.processNewDDL(mapMigrateFolder, srcLines, destLines, TRIGGERS, srcEnv, destEnv);
+      const updatedTriggers = await this.processUpdatedDDL(mapMigrateFolder, srcLines, destLines, TRIGGERS, srcEnv, destEnv);
+      const deprecatedTriggers = await this.processDeprecatedDDL(mapMigrateFolder, srcLines, destLines, TRIGGERS, srcEnv, destEnv);
 
       await this.generateReports(destEnv, { ...newTriggers, ...deprecatedTriggers, ...updatedTriggers });
     } catch (error) {
@@ -909,6 +923,9 @@ module.exports = class ComparatorService {
           break;
         case TRIGGERS:
           await this.reportTriggerChange(srcEnv, env, specificName);
+          break;
+        case EVENTS:
+          await this.reportDLLChange(srcEnv, EVENTS, env, specificName);
           break;
         default:
           this.report2console(env);

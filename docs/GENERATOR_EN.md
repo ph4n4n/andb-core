@@ -35,6 +35,7 @@ ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_E
 ## Default Configuration
 
 ### Environments
+
 - **All**: `DEV`, `PROD`
 - **Compare**: `DEV`, `PROD`
 - **Migrate**: `PROD`
@@ -42,12 +43,15 @@ ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_E
 > 💡 **Note**: Can be extended with custom environments like `STAGE`, `UAT`, `TEST` based on project needs.
 
 ### DDL Types
+
 - `fn` - Functions
-- `sp` - Stored Procedures  
+- `sp` - Stored Procedures
 - `tbl` - Tables
 - `trg` - Triggers
+- `ev` - Events
 
 ### Operations
+
 - `export` - Export DDL
 - `compare` - Compare DDL
 - `migrate` - Migration (new/update)
@@ -63,6 +67,7 @@ npm run export:dev:fn      # Export functions from DEV
 npm run export:dev:sp      # Export procedures from DEV
 npm run export:dev:tbl     # Export tables from DEV
 npm run export:dev:trg     # Export triggers from DEV
+npm run export:dev:ev      # Export events from DEV
 
 # Export all
 npm run export:dev         # Export all from DEV
@@ -77,6 +82,7 @@ npm run compare:prod:fn    # Compare functions in PROD
 npm run compare:prod:sp    # Compare procedures in PROD
 npm run compare:prod:tbl   # Compare tables in PROD
 npm run compare:prod:trg   # Compare triggers in PROD
+npm run compare:prod:ev    # Compare events in PROD
 
 # Generate report
 npm run compare:prod:report # Generate report for PROD
@@ -97,12 +103,14 @@ npm run migrate:prod:new:fn    # Migrate new functions
 npm run migrate:prod:new:sp    # Migrate new procedures
 npm run migrate:prod:new:tbl   # Migrate new tables
 npm run migrate:prod:new:trg   # Migrate new triggers
+npm run migrate:prod:new:ev    # Migrate new events
 
 # Migrate update objects
 npm run migrate:prod:update:fn # Update functions
 npm run migrate:prod:update:sp # Update procedures
 npm run migrate:prod:update:tbl # Update tables
 npm run migrate:prod:update:trg # Update triggers
+npm run migrate:prod:update:ev  # Update events
 
 # Migrate by type
 npm run migrate:prod:new       # Migrate all new
@@ -119,6 +127,7 @@ npm run migrate:prod           # Full migration PROD
 npm run deprecate:prod:fn      # Deprecate functions
 npm run deprecate:prod:sp      # Deprecate procedures
 npm run deprecate:prod:trg     # Deprecate triggers
+npm run deprecate:prod:ev      # Deprecate events
 
 # Shorthand
 npm run dep:prod:fn            # Shorthand for deprecate
@@ -158,20 +167,24 @@ npm run lint:fix              # ESLint auto-fix
 ## Working Logic
 
 ### 1. Environment Priority
+
 ```
 CLI options > CLI context > Default values
 ```
 
 ### 2. Compare Logic
+
 - **DEV**: `export:dev + compare:dev:off`
 - **Others**: `export:prev + export:current + compare:current:off`
 
 ### 3. Migrate Logic
+
 - **Full**: `compare + migrate:new + migrate:update + compare:migrated`
 - **New**: Only migrate new objects
 - **Update**: Only update existing objects
 
 ### 4. Deprecate Logic
+
 - **Skip**: Tables (no deprecate)
 - **OTE**: Functions and procedures only
 - **Shorthand**: `dep` instead of `deprecate`
@@ -236,4 +249,4 @@ npm run export:dev:fn --dry-run
 2. **Environment**: Use environment variables for production
 3. **Testing**: Test scripts on dev before running production
 4. **Backup**: Always backup before migration
-5. **Documentation**: Document workflow for team 
+5. **Documentation**: Document workflow for team

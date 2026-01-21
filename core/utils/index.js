@@ -12,7 +12,8 @@
 
 const FileManager = require('./file.helper')
 const report = require('./report.helper')
+const DDLParser = require('./ddl.parser')
 
 module.exports = {
-  FileManager, report
+  FileManager, report, DDLParser
 }

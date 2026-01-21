@@ -35,6 +35,7 @@ ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_E
 ## Cấu hình mặc định
 
 ### Môi trường
+
 - **Tất cả**: `DEV`, `PROD`
 - **Compare**: `DEV`, `PROD`
 - **Migrate**: `PROD`
@@ -42,12 +43,15 @@ ANDB_ENVIRONMENTS="DEV,PROD" ANDB_COMPARE_ENVIRONMENTS="DEV,PROD" ANDB_MIGRATE_E
 > 💡 **Lưu ý**: Có thể mở rộng tùy chỉnh thêm môi trường khác như `STAGE`, `UAT`, `TEST` tùy theo nhu cầu project.
 
 ### Loại DDL
+
 - `fn` - Functions
-- `sp` - Stored Procedures  
+- `sp` - Stored Procedures
 - `tbl` - Tables
 - `trg` - Triggers
+- `ev` - Events
 
 ### Operations
+
 - `export` - Xuất DDL
 - `compare` - So sánh DDL
 - `migrate` - Migration (new/update)
@@ -63,6 +67,7 @@ npm run export:dev:fn      # Export functions từ DEV
 npm run export:dev:sp      # Export procedures từ DEV
 npm run export:dev:tbl     # Export tables từ DEV
 npm run export:dev:trg     # Export triggers từ DEV
+npm run export:dev:ev      # Export events từ DEV
 
 # Export tất cả
 npm run export:dev         # Export tất cả từ DEV
@@ -77,6 +82,7 @@ npm run compare:prod:fn    # Compare functions trong PROD
 npm run compare:prod:sp    # Compare procedures trong PROD
 npm run compare:prod:tbl   # Compare tables trong PROD
 npm run compare:prod:trg   # Compare triggers trong PROD
+npm run compare:prod:ev    # Compare events trong PROD
 
 # Generate report
 npm run compare:prod:report # Tạo report cho PROD
@@ -97,12 +103,14 @@ npm run migrate:prod:new:fn    # Migrate new functions
 npm run migrate:prod:new:sp    # Migrate new procedures
 npm run migrate:prod:new:tbl   # Migrate new tables
 npm run migrate:prod:new:trg   # Migrate new triggers
+npm run migrate:prod:new:ev    # Migrate new events
 
 # Migrate update objects
 npm run migrate:prod:update:fn # Update functions
 npm run migrate:prod:update:sp # Update procedures
 npm run migrate:prod:update:tbl # Update tables
 npm run migrate:prod:update:trg # Update triggers
+npm run migrate:prod:update:ev  # Update events
 
 # Migrate theo loại
 npm run migrate:prod:new       # Migrate tất cả new
@@ -119,6 +127,7 @@ npm run migrate:prod           # Full migration PROD
 npm run deprecate:prod:fn      # Deprecate functions
 npm run deprecate:prod:sp      # Deprecate procedures
 npm run deprecate:prod:trg     # Deprecate triggers
+npm run deprecate:prod:ev      # Deprecate events
 
 # Shorthand
 npm run dep:prod:fn            # Shorthand cho deprecate
@@ -158,20 +167,24 @@ npm run lint:fix              # ESLint auto-fix
 ## Logic hoạt động
 
 ### 1. Environment Priority
+
 ```
 CLI options > CLI context > Default values
 ```
 
 ### 2. Compare Logic
+
 - **DEV**: `export:dev + compare:dev:off`
 - **Khác**: `export:prev + export:current + compare:current:off`
 
 ### 3. Migrate Logic
+
 - **Full**: `compare + migrate:new + migrate:update + compare:migrated`
 - **New**: Chỉ migrate objects mới
 - **Update**: Chỉ update objects hiện có
 
 ### 4. Deprecate Logic
+
 - **Bỏ qua**: Tables (không deprecate)
 - **OTE**: Chỉ functions và procedures
 - **Shorthand**: `dep` thay cho `deprecate`
@@ -236,4 +249,4 @@ npm run export:dev:fn --dry-run
 2. **Environment**: Sử dụng biến môi trường cho production
 3. **Testing**: Test scripts trên dev trước khi chạy production
 4. **Backup**: Luôn backup trước khi migrate
-5. **Documentation**: Ghi chú workflow cho team 
+5. **Documentation**: Ghi chú workflow cho team

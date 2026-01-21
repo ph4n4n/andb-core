@@ -26,6 +26,7 @@ exports.DDL = {
   PROCEDURES: 'procedures',
   TRIGGERS: 'triggers',
   VIEWS: 'views',
+  EVENTS: 'events',
 };
 
 /**

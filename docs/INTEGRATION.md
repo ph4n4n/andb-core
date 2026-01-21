@@ -1,20 +1,20 @@
-# Hướng dẫn tích hợp - andb-core
+# Hướng dẫn tích hợp - @the-andb/core
 
 ## Tổng quan
 
-andb-core cung cấp API programmatic để tích hợp vào ứng dụng Node.js của bạn.
+@the-andb/core cung cấp API programmatic để tích hợp vào ứng dụng Node.js của bạn.
 
 ## Cài đặt
 
 ```bash
-npm install andb-core
+npm install @the-andb/core
 ```
 
 ## Import và Setup
 
 ```javascript
-// Import andb-core
-const andb = require('andb-core');
+// Import @the-andb/core
+const andb = require("@the-andb/core");
 
 // Destructure các services
 const { service, utils, commander, interfaces } = andb;
@@ -33,26 +33,26 @@ class MyDatabaseService extends interfaces.IDatabaseService {
         host: process.env.DEV_DB_HOST,
         database: process.env.DEV_DB_NAME,
         user: process.env.DEV_DB_USER,
-        password: process.env.DEV_DB_PASS
+        password: process.env.DEV_DB_PASS,
       },
       PROD: {
         host: process.env.PROD_DB_HOST,
         database: process.env.PROD_DB_NAME,
         user: process.env.PROD_DB_USER,
-        password: process.env.PROD_DB_PASS
-      }
+        password: process.env.PROD_DB_PASS,
+      },
     };
     return configs[env.toUpperCase()];
   }
 
   // Xác định source environment
   getSourceEnv(envName) {
-    return envName === 'PROD' ? 'DEV' : 'DEV';
+    return envName === "PROD" ? "DEV" : "DEV";
   }
 
   // Xác định destination environment
   getDestEnv(env) {
-    return env === 'DEV' ? 'PROD' : 'PROD';
+    return env === "DEV" ? "PROD" : "PROD";
   }
 
   // Lấy tên database
@@ -62,9 +62,7 @@ class MyDatabaseService extends interfaces.IDatabaseService {
 
   // Thay thế environment-specific values
   replaceWithEnv(ddl, destEnv) {
-    return destEnv === 'PROD' 
-      ? ddl.replace(/@dev\.com/g, '@prod.com')
-      : ddl;
+    return destEnv === "PROD" ? ddl.replace(/@dev\.com/g, "@prod.com") : ddl;
   }
 }
 ```
@@ -82,8 +80,8 @@ const cli = commander.build({
   getDestEnv: dbService.getDestEnv.bind(dbService),
   getDBName: dbService.getDBName.bind(dbService),
   replaceWithEnv: dbService.replaceWithEnv.bind(dbService),
-  ENVIRONMENTS: { DEV: 'DEV', PROD: 'PROD' },
-  baseDir: process.cwd()
+  ENVIRONMENTS: { DEV: "DEV", PROD: "PROD" },
+  baseDir: process.cwd(),
 });
 
 // Parse CLI arguments
@@ -99,16 +97,19 @@ const { Exporter } = service;
 
 // Export tables
 const exporter = new Exporter();
-await exporter.exportTables('DEV');
+await exporter.exportTables("DEV");
 
 // Export procedures
-await exporter.exportProcedures('DEV');
+await exporter.exportProcedures("DEV");
 
 // Export functions
-await exporter.exportFunctions('DEV');
+await exporter.exportFunctions("DEV");
 
 // Export triggers
-await exporter.exportTriggers('DEV');
+await exporter.exportTriggers("DEV");
+
+// Export events
+await exporter.exportEvents("DEV");
 ```
 
 ### 2. Compare Service
@@ -118,13 +119,13 @@ const { Comparator } = service;
 
 // Compare tables
 const comparator = new Comparator();
-await comparator.compareTables('DEV', 'PROD');
+await comparator.compareTables("DEV", "PROD");
 
 // Compare procedures
-await comparator.compareProcedures('DEV', 'PROD');
+await comparator.compareProcedures("DEV", "PROD");
 
 // Generate report
-await comparator.generateReport('PROD');
+await comparator.generateReport("PROD");
 ```
 
 ### 3. Migration Service
@@ -134,13 +135,13 @@ const { Migrator } = service;
 
 // Migrate new objects
 const migrator = new Migrator();
-await migrator.migrateNew('DEV', 'PROD');
+await migrator.migrateNew("DEV", "PROD");
 
 // Update existing objects
-await migrator.migrateUpdate('DEV', 'PROD');
+await migrator.migrateUpdate("DEV", "PROD");
 
 // Deprecate objects
-await migrator.deprecate('PROD');
+await migrator.deprecate("PROD");
 ```
 
 ### 4. Monitor Service
@@ -150,13 +151,13 @@ const { Monitor } = service;
 
 // Monitor process list
 const monitor = new Monitor();
-await monitor.getProcessList('PROD');
+await monitor.getProcessList("PROD");
 
 // Monitor database status
-await monitor.getStatus('PROD');
+await monitor.getStatus("PROD");
 
 // Custom query
-await monitor.executeQuery('SELECT * FROM information_schema.tables', 'PROD');
+await monitor.executeQuery("SELECT * FROM information_schema.tables", "PROD");
 ```
 
 ## Utils
@@ -167,16 +168,16 @@ await monitor.executeQuery('SELECT * FROM information_schema.tables', 'PROD');
 const { FileHelper } = utils;
 
 // Read file
-const content = await FileHelper.readFile('path/to/file.sql');
+const content = await FileHelper.readFile("path/to/file.sql");
 
 // Write file
-await FileHelper.writeFile('path/to/output.sql', content);
+await FileHelper.writeFile("path/to/output.sql", content);
 
 // Create directory
-await FileHelper.createDir('path/to/directory');
+await FileHelper.createDir("path/to/directory");
 
 // List files
-const files = await FileHelper.listFiles('path/to/directory');
+const files = await FileHelper.listFiles("path/to/directory");
 ```
 
 ### 2. Report Helper
@@ -185,13 +186,13 @@ const files = await FileHelper.listFiles('path/to/directory');
 const { ReportHelper } = utils;
 
 // Generate HTML report
-await ReportHelper.generateHtmlReport(data, 'output/report.html');
+await ReportHelper.generateHtmlReport(data, "output/report.html");
 
 // Generate JSON report
-await ReportHelper.generateJsonReport(data, 'output/report.json');
+await ReportHelper.generateJsonReport(data, "output/report.json");
 
 // Generate diff report
-await ReportHelper.generateDiffReport(diffData, 'output/diff.html');
+await ReportHelper.generateDiffReport(diffData, "output/diff.html");
 ```
 
 ### 3. Crypt Utils
@@ -200,13 +201,13 @@ await ReportHelper.generateDiffReport(diffData, 'output/diff.html');
 const { Crypt } = utils;
 
 // Encrypt sensitive data
-const encrypted = Crypt.encrypt('sensitive_data', 'secret_key');
+const encrypted = Crypt.encrypt("sensitive_data", "secret_key");
 
 // Decrypt data
-const decrypted = Crypt.decrypt(encrypted, 'secret_key');
+const decrypted = Crypt.decrypt(encrypted, "secret_key");
 
 // Hash password
-const hashed = Crypt.hash('password');
+const hashed = Crypt.hash("password");
 ```
 
 ## Configuration
@@ -269,7 +270,7 @@ ANDB_LOG_LEVEL=info
 ### 1. Basic Integration
 
 ```javascript
-const andb = require('andb-core');
+const andb = require("andb-core");
 const { service, utils } = andb;
 
 class DatabaseManager {
@@ -284,6 +285,7 @@ class DatabaseManager {
     await this.exporter.exportProcedures(env);
     await this.exporter.exportFunctions(env);
     await this.exporter.exportTriggers(env);
+    await this.exporter.exportEvents(env);
   }
 
   async compareEnvironments(source, target) {
@@ -291,25 +293,26 @@ class DatabaseManager {
     await this.comparator.compareProcedures(source, target);
     await this.comparator.compareFunctions(source, target);
     await this.comparator.compareTriggers(source, target);
+    await this.comparator.compareEvents(source, target);
   }
 
   async migrateToProduction() {
-    await this.migrator.migrateNew('DEV', 'PROD');
-    await this.migrator.migrateUpdate('DEV', 'PROD');
+    await this.migrator.migrateNew("DEV", "PROD");
+    await this.migrator.migrateUpdate("DEV", "PROD");
   }
 }
 
 // Usage
 const dbManager = new DatabaseManager();
-await dbManager.exportAll('DEV');
-await dbManager.compareEnvironments('DEV', 'PROD');
+await dbManager.exportAll("DEV");
+await dbManager.compareEnvironments("DEV", "PROD");
 await dbManager.migrateToProduction();
 ```
 
 ### 2. Custom CLI
 
 ```javascript
-const andb = require('andb-core');
+const andb = require("andb-core");
 const { commander, interfaces } = andb;
 
 class CustomDatabaseService extends interfaces.IDatabaseService {
@@ -319,16 +322,16 @@ class CustomDatabaseService extends interfaces.IDatabaseService {
       host: process.env[`${env}_DB_HOST`],
       database: process.env[`${env}_DB_NAME`],
       user: process.env[`${env}_DB_USER`],
-      password: process.env[`${env}_DB_PASS`]
+      password: process.env[`${env}_DB_PASS`],
     };
   }
 
   getSourceEnv(envName) {
-    return envName === 'PROD' ? 'DEV' : 'DEV';
+    return envName === "PROD" ? "DEV" : "DEV";
   }
 
   getDestEnv(env) {
-    return env === 'DEV' ? 'PROD' : 'PROD';
+    return env === "DEV" ? "PROD" : "PROD";
   }
 
   getDBName(env, isDbMail = false) {
@@ -336,9 +339,7 @@ class CustomDatabaseService extends interfaces.IDatabaseService {
   }
 
   replaceWithEnv(ddl, destEnv) {
-    return destEnv === 'PROD' 
-      ? ddl.replace(/@dev\.com/g, '@prod.com')
-      : ddl;
+    return destEnv === "PROD" ? ddl.replace(/@dev\.com/g, "@prod.com") : ddl;
   }
 }
 
@@ -350,8 +351,8 @@ const cli = commander.build({
   getDestEnv: dbService.getDestEnv.bind(dbService),
   getDBName: dbService.getDBName.bind(dbService),
   replaceWithEnv: dbService.replaceWithEnv.bind(dbService),
-  ENVIRONMENTS: { DEV: 'DEV', PROD: 'PROD' },
-  baseDir: process.cwd()
+  ENVIRONMENTS: { DEV: "DEV", PROD: "PROD" },
+  baseDir: process.cwd(),
 });
 
 cli.parse(process.argv);
@@ -360,7 +361,7 @@ cli.parse(process.argv);
 ### 3. Automated Workflow
 
 ```javascript
-const andb = require('andb-core');
+const andb = require("andb-core");
 const { service, utils } = andb;
 
 class AutomatedWorkflow {
@@ -374,34 +375,34 @@ class AutomatedWorkflow {
   async runFullWorkflow() {
     try {
       // 1. Export from DEV
-      console.log('Exporting from DEV...');
-      await this.exporter.exportTables('DEV');
-      await this.exporter.exportProcedures('DEV');
-      await this.exporter.exportFunctions('DEV');
+      console.log("Exporting from DEV...");
+      await this.exporter.exportTables("DEV");
+      await this.exporter.exportProcedures("DEV");
+      await this.exporter.exportFunctions("DEV");
 
       // 2. Compare with STAGE
-      console.log('Comparing with STAGE...');
-      await this.comparator.compareTables('DEV', 'STAGE');
-      await this.comparator.compareProcedures('DEV', 'STAGE');
-      await this.comparator.compareFunctions('DEV', 'STAGE');
+      console.log("Comparing with STAGE...");
+      await this.comparator.compareTables("DEV", "STAGE");
+      await this.comparator.compareProcedures("DEV", "STAGE");
+      await this.comparator.compareFunctions("DEV", "STAGE");
 
       // 3. Migrate to STAGE
-      console.log('Migrating to STAGE...');
-      await this.migrator.migrateNew('DEV', 'STAGE');
-      await this.migrator.migrateUpdate('DEV', 'STAGE');
+      console.log("Migrating to STAGE...");
+      await this.migrator.migrateNew("DEV", "STAGE");
+      await this.migrator.migrateUpdate("DEV", "STAGE");
 
       // 4. Monitor STAGE
-      console.log('Monitoring STAGE...');
-      await this.monitor.getStatus('STAGE');
+      console.log("Monitoring STAGE...");
+      await this.monitor.getStatus("STAGE");
 
       // 5. Migrate to PROD
-      console.log('Migrating to PROD...');
-      await this.migrator.migrateNew('STAGE', 'PROD');
-      await this.migrator.migrateUpdate('STAGE', 'PROD');
+      console.log("Migrating to PROD...");
+      await this.migrator.migrateNew("STAGE", "PROD");
+      await this.migrator.migrateUpdate("STAGE", "PROD");
 
-      console.log('Workflow completed successfully!');
+      console.log("Workflow completed successfully!");
     } catch (error) {
-      console.error('Workflow failed:', error);
+      console.error("Workflow failed:", error);
       throw error;
     }
   }
@@ -415,7 +416,7 @@ await workflow.runFullWorkflow();
 ## Error Handling
 
 ```javascript
-const andb = require('andb-core');
+const andb = require("andb-core");
 const { service } = andb;
 
 class SafeDatabaseManager {
@@ -459,34 +460,34 @@ class SafeDatabaseManager {
 ## Testing
 
 ```javascript
-const andb = require('andb-core');
+const andb = require("andb-core");
 const { service } = andb;
 
 // Test export functionality
 async function testExport() {
   const exporter = new service.Exporter();
-  
+
   try {
-    await exporter.exportTables('DEV');
-    console.log('✅ Export test passed');
+    await exporter.exportTables("DEV");
+    console.log("✅ Export test passed");
   } catch (error) {
-    console.error('❌ Export test failed:', error);
+    console.error("❌ Export test failed:", error);
   }
 }
 
 // Test compare functionality
 async function testCompare() {
   const comparator = new service.Comparator();
-  
+
   try {
-    await comparator.compareTables('DEV', 'PROD');
-    console.log('✅ Compare test passed');
+    await comparator.compareTables("DEV", "PROD");
+    console.log("✅ Compare test passed");
   } catch (error) {
-    console.error('❌ Compare test failed:', error);
+    console.error("❌ Compare test failed:", error);
   }
 }
 
 // Run tests
 testExport();
 testCompare();
-``` 
+```

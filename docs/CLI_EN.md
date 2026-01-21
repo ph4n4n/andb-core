@@ -1,13 +1,13 @@
-# CLI Guide - andb-core
+# CLI Guide - @the-andb/core
 
 ## Overview
 
-CLI (Command Line Interface) of andb-core provides commands to manage database migration and comparison.
+CLI (Command Line Interface) of @the-andb/core provides commands to manage database migration and comparison.
 
 ## Installation
 
 ```bash
-npm install andb-core
+npm install @the-andb/core
 ```
 
 ## Basic Commands
@@ -26,6 +26,9 @@ andb export -f [environment]
 
 # Export triggers
 andb export -tr [environment]
+
+# Export events
+andb export -e [environment]
 
 # Export all DDL types
 andb export -a [environment]
@@ -46,6 +49,9 @@ andb compare -f [environment]
 # Compare triggers
 andb compare -tr [environment]
 
+# Compare events
+andb compare -e [environment]
+
 # Generate comparison report
 andb compare -r [environment]
 
@@ -61,12 +67,14 @@ andb migrate:new -t [environment]  # Tables
 andb migrate:new -p [environment]  # Procedures
 andb migrate:new -f [environment]  # Functions
 andb migrate:new -tr [environment] # Triggers
+andb migrate:new -e [environment]  # Events
 
 # Update existing objects
 andb migrate:update -t [environment]  # Tables
 andb migrate:update -p [environment]  # Procedures
 andb migrate:update -f [environment]  # Functions
 andb migrate:update -tr [environment] # Triggers
+andb migrate:update -e [environment]  # Events
 ```
 
 ### Deprecate Commands
@@ -76,11 +84,13 @@ andb migrate:update -tr [environment] # Triggers
 andb deprecate -p [environment]  # Procedures
 andb deprecate -f [environment]  # Functions
 andb deprecate -tr [environment] # Triggers
+andb deprecate -e [environment]  # Events
 
 # Shorthand
 andb dep -p [environment]  # Procedures
 andb dep -f [environment]  # Functions
 andb dep -tr [environment] # Triggers
+andb dep -e [environment]  # Events
 
 # OTE removal (functions and procedures only)
 andb deprecate -rmof [environment] # Remove OTE functions
@@ -125,12 +135,14 @@ andb helper --config
 ## Environment Options
 
 ### Default Environments
+
 - `DEV` - Development environment
 - `PROD` - Production environment
 
 > 💡 **Note**: Can be customized with additional environments like `STAGE`, `UAT`, `TEST` based on project needs.
 
 ### Custom Environments
+
 ```bash
 # Set custom environments
 export ANDB_ENVIRONMENTS="DEV,STAGE,PROD"
@@ -145,6 +157,7 @@ export ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD"
 ## Options
 
 ### Global Options
+
 ```bash
 --help, -h          # Show help
 --version, -v       # Show version
@@ -156,17 +169,20 @@ export ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD"
 ```
 
 ### Export Options
+
 ```bash
 -t, --tables       # Export tables
 -p, --procedures   # Export stored procedures
 -f, --functions    # Export functions
 -tr, --triggers    # Export triggers
+-e, --events       # Export events
 -a, --all          # Export all DDL types
 -o, --output <dir> # Output directory
 --format <format>  # Output format (sql, json, yaml)
 ```
 
 ### Compare Options
+
 ```bash
 -r, --report       # Generate comparison report
 --html             # Generate HTML report
@@ -176,6 +192,7 @@ export ANDB_MIGRATE_ENVIRONMENTS="STAGE,PROD"
 ```
 
 ### Migration Options
+
 ```bash
 --force            # Force migration without confirmation
 --backup           # Create backup before migration
@@ -246,6 +263,7 @@ andb compare -f PROD
 ## Configuration
 
 ### Environment Variables
+
 ```bash
 # Database Configuration
 <ENV>_DB_HOST      # Database host
@@ -264,6 +282,7 @@ ANDB_LOG_LEVEL            # Log level (debug, info, warn, error)
 ```
 
 ### Config File
+
 ```json
 {
   "environments": {
@@ -295,29 +314,32 @@ ANDB_LOG_LEVEL            # Log level (debug, info, warn, error)
 ### Common Issues
 
 1. **Connection Error**
+
    ```bash
    # Check database connection
    mysql -h <host> -u <user> -p <database>
-   
+
    # Verify environment variables
    echo $DEV_DB_HOST
    echo $DEV_DB_NAME
    ```
 
 2. **Permission Error**
+
    ```bash
    # Check file permissions
    ls -la output/
-   
+
    # Create output directory
    mkdir -p output/
    ```
 
 3. **Configuration Error**
+
    ```bash
    # Show current configuration
    andb helper --config
-   
+
    # Check environment variables
    env | grep ANDB
    ```
@@ -342,4 +364,4 @@ andb migrate:new -p PROD --dry-run
 3. **Use environment variables for sensitive data**
 4. **Validate DDL before migration**
 5. **Monitor database performance**
-6. **Keep logs for audit trail** 
+6. **Keep logs for audit trail**

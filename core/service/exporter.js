@@ -11,8 +11,9 @@
  */
 const mysql = require("mysql2");
 const {
-  DDL: { TRIGGERS, TABLES, VIEWS, PROCEDURES, FUNCTIONS }
+  DDL: { TRIGGERS, TABLES, VIEWS, PROCEDURES, FUNCTIONS, EVENTS }
 } = require("../configs/constants");
+const { DDLParser } = require('../utils');
 // Remove direct import of file helper
 // const {
 //   saveToFile,
@@ -499,6 +500,62 @@ module.exports = class ExporterService {
     });
   }
 
+  async exportEvents(connection, dbConfig, specificName = null) {
+    return new Promise((resolve, reject) => {
+      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+      const ddlFolderPath = this.makeDDLFolderReady(dbPath, EVENTS, specificName);
+
+      const eventQuery = specificName
+        ? `SHOW EVENTS WHERE Db = ? AND Name = ?`
+        : `SHOW EVENTS WHERE Db = ?`;
+      const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+
+      connection.query(eventQuery, queryParams, async (err, eventResults) => {
+        if (err) {
+          if (global.logger) global.logger.error("Error retrieving events: ", err);
+          connection.end();
+          reject(err);
+          return;
+        }
+
+        try {
+          if (!specificName) {
+            await this.appendReport(dbConfig.envName, { events_total: eventResults.length });
+          }
+          const exportedData = [];
+
+          for (const row of eventResults) {
+            const eventName = row.Name;
+            const query = `SHOW CREATE EVENT \`${eventName}\``;
+
+            try {
+              const result = await util.promisify(connection.query).call(connection, query);
+              const createStatement = result[0]["Create Event"];
+
+              // Normalize: cleanup DEFINER and ON SCHEDULE if strictly needed, 
+              // but for events the SCHEDULE is part of important logic.
+              let cleanStatement = this.convertKeywordsToUppercase(createStatement);
+
+              this.appendDDL(dbConfig.envName, ddlFolderPath, EVENTS, eventName, cleanStatement);
+              exportedData.push({ name: eventName, ddl: cleanStatement });
+            } catch (eventError) {
+              if (global.logger) global.logger.error(`Error exporting event ${eventName}:`, eventError);
+            }
+          }
+
+          if (this.storage) {
+            await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), EVENTS, exportedData, !specificName);
+          }
+
+          return resolve({ count: eventResults.length, data: exportedData });
+        } catch (error) {
+          if (global.logger) global.logger.error("Error in exportEvents:", error);
+          return reject(error);
+        }
+      });
+    });
+  }
+
   async appendDDL(
     env,
     ddlFolderPath,
@@ -574,9 +631,11 @@ module.exports = class ExporterService {
       )
       .join("")
       .replace(/\`(GROUP|USER|GROUPS)\`/g, (match, p1) => `\`${p1.toLowerCase()}\``)
-      .replace(/\t/g, "  ")
-      .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ");
-    return convertedQuery;
+      .replace(/\t/g, "  ");
+
+    // Use robust DDLParser to clean DEFINER instead of simple regex
+    // .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ");
+    return DDLParser.cleanDefiner(convertedQuery);
   }
 
   /**
@@ -635,6 +694,9 @@ module.exports = class ExporterService {
                 break;
               case TRIGGERS:
                 result = await this.exportTriggers(connection, dbConfig, specificName);
+                break;
+              case EVENTS:
+                result = await this.exportEvents(connection, dbConfig, specificName);
                 break;
             }
 
