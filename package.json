@@ -1,15 +1,20 @@
 {
   "name": "@the-andb/core",
-  "version": "2.1.1",
+  "version": "3.0.1",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Database migration and comparison tool by ph4n4n",
+  "description": "The Advanced Database Orchestration Engine - Intelligent Synchronization & Schema Management.",
   "main": "index.js",
+  "bin": {
+    "andb": "src/cli.js"
+  },
   "files": [
     "index.js",
-    "core/",
-    "docs/"
+    "src/",
+    "docs/",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
     "test": "jest",
@@ -42,10 +47,11 @@
     "andb",
     "andb-core",
     "andb-cli",
-    "ph4n4n",
-    "mysql"
+    "orchestrator",
+    "intelligence",
+    "the-andb"
   ],
-  "author": "ph4n4n",
+  "author": "The Andb (ph4n4n)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/The-Andb/andb-core/issues"

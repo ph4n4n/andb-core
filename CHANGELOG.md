@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-01-21
+
+### Added
+
+- **Premium Reporting Engine**: Revamped HTML reports with dark-mode primary aesthetics, Highcharts integration via CDN, and high-fidelity data visualization.
+- **Unified DDL Support**: Expanded support for Views, Procedures, Functions, Triggers, and Events in both comparison and migration engines.
+- **Direct Database Driver Access**: Added `setForeignKeyChecks` and other session hygiene methods to `IDatabaseDriver` for better abstraction.
+- **Dynamic Charting**: Reports now automatically generate charts based on the actual distribution of database objects.
+- **High-Fidelity Demo**: Added a premium demo script at `test/reports/report.demo.js` to showcase report capabilities.
+
+### Improved
+
+- **Core Abstraction Layer**: Transitioned to a "Zero to Hero" architectural strategy focusing on driver-agnostic commands and centralized DDL generation.
+- **Recursive Directory Management**: Better handling of nested DDL structures and backup management.
+- **Brand Identity**: Rebranded as **The Andb Orchestrator** - a premium database orchestration tool.
+- **NPM Package Health**: Cleaned up `files` list and fixed `index.js` path references.
+
+### Fixed
+
+- Chart rendering issues due to local library dependency (now uses reliable CDNs).
+- Incorrect file path references in `MigratorService` for Percona Toolkit tables.
+- Compatibility issues with `better-sqlite3` and `mysql2` in specific environments.
+
 ## [2.1.0] - 2026-01-12
 
 ### Added
@@ -35,49 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MigratorService for database migrations
 - MonitorService for database monitoring
 - Pluggable StorageStrategy interface
-  - FileStorage implementation (Git-friendly)
-  - SQLiteStorage implementation (UI-optimized)
+- FileStorage implementation (Git-friendly)
+- SQLiteStorage implementation (UI-optimized)
 - CLI builder for command-line integration
 - Script generator for npm scripts
 - Helper utilities
 
-### Features
-
-- MySQL database support
-- DDL export (Tables, Functions, Procedures, Triggers)
-- Environment comparison with detailed diff
-- Migration tracking with history
-- Storage abstraction layer
-- Domain normalization support
-- Comprehensive error handling
-- Detailed logging
-
-### Architecture
-
-- Service-oriented design
-- Dependency injection via Container
-- Pluggable storage strategies
-- Clean separation of concerns
-- Reusable core for CLI and UI
-
-### Documentation
-
-- API documentation
-- Integration guides (EN/VI)
-- CLI documentation (EN/VI)
-- Generator documentation (EN/VI)
-- Example projects
-
-## [Unreleased]
-
-### Planned
-
-- PostgreSQL support
-- Migration rollback
-- Schema versioning
-- Enhanced reporting
-- Performance optimizations
-
----
-
-[1.0.0-beta.1]: https://github.com/ph4n4n/andb-core/releases/tag/v1.0.0-beta.1
+[3.0.0]: https://github.com/The-Andb/andb-core/releases/tag/v3.0.0
+[2.1.0]: https://github.com/The-Andb/andb-core/releases/tag/v2.1.0
+[1.0.0-beta.1]: https://github.com/The-Andb/andb-core/releases/tag/v1.0.0-beta.1

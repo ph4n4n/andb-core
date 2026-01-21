@@ -1,0 +1,25 @@
+{
+  "functions_total": 15,
+  "procedures_total": 10,
+  "tables_total": 45,
+  "functions_new": 2,
+  "procedures_new": 1,
+  "tables_new": 3,
+  "functions_updated": 4,
+  "procedures_updated": 2,
+  "tables_updated": 1,
+  "indexes_updated": 5,
+  "columns_updated": 12,
+  "functions_deprecated": 0,
+  "procedures_deprecated": 0,
+  "tables_deprecated": 2,
+  "columns_missing": {
+    "orders": [
+      "ship_date",
+      "tracking_no"
+    ],
+    "products": [
+      "internal_sku"
+    ]
+  }
+}
