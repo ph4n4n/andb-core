@@ -1,7 +1,7 @@
 const mysql = require('mysql2');
 const util = require('util');
 const { IDatabaseDriver, IIntrospectionService } = require('../../interfaces/driver.interface');
-const { DDLParser } = require('../../utils');
+
 
 class MySQLDriver extends IDatabaseDriver {
   constructor(config) {
@@ -58,6 +58,14 @@ class MySQLDriver extends IDatabaseDriver {
     return new MySQLIntrospectionService(this);
   }
 
+  getDDLParser() {
+    if (!this.parser) {
+      const MySQLParser = require('./MySQLParser');
+      this.parser = new MySQLParser();
+    }
+    return this.parser;
+  }
+
   getDDLGenerator() {
     // Return MySQLDDLGenerator (TODO)
     return null;
@@ -65,6 +73,10 @@ class MySQLDriver extends IDatabaseDriver {
 }
 
 class MySQLIntrospectionService extends IIntrospectionService {
+  constructor(driver) {
+    super(driver);
+    this.parser = driver.getDDLParser();
+  }
   async listTables(dbName, pattern = null) {
     const sql = pattern ? "SHOW TABLES LIKE ?" : "SHOW TABLES";
     const params = pattern ? [pattern] : [];
@@ -166,19 +178,10 @@ class MySQLIntrospectionService extends IIntrospectionService {
     return this._normalizeDDL(result[0]['Create Event']);
   }
 
-  // Helper to normalize DDL (uppercase keywords, etc)
-  // Reused logic from exporter.js but cleaner
-  // Helper to normalize DDL (uppercase keywords, etc)
+  // Helper to normalize DDL using Driver's parser
   _normalizeDDL(ddl) {
     if (!ddl) return null;
-
-    // 1. Uppercase keywords
-    let clean = DDLParser.uppercaseKeywords(ddl);
-
-    // 2. Clean Definer
-    clean = DDLParser.cleanDefiner(clean);
-
-    return clean;
+    return this.parser.normalize(ddl);
   }
 }
 

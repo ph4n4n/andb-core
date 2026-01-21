@@ -86,10 +86,7 @@ module.exports = class ExporterService {
           const result = await driver.query(query);
           const createStatement = result[0]["SQL Original Statement"];
 
-          const formattedStatement = this.convertKeywordsToUppercase(createStatement)
-            .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ")
-            .replace(/\sCOLLATE\s+\w+\s/, " ")
-            .replace(/\sCHARSET\s+\w+\s/, " ");
+          const formattedStatement = driver.getDDLParser().normalize(createStatement);
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
 
@@ -163,7 +160,7 @@ module.exports = class ExporterService {
             continue;
           }
 
-          const cleanStatement = self.convertKeywordsToUppercase(createStatement);
+          const cleanStatement = driver.getDDLParser().normalize(createStatement);
 
           self.appendDDL(dbConfig.envName, ddlFolderPath, FUNCTIONS, fnName, cleanStatement);
 
@@ -235,7 +232,7 @@ module.exports = class ExporterService {
             continue;
           }
 
-          const cleanStatement = this.convertKeywordsToUppercase(createStatement);
+          const cleanStatement = driver.getDDLParser().normalize(createStatement);
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, PROCEDURES, spName, cleanStatement);
 
@@ -295,7 +292,7 @@ module.exports = class ExporterService {
         try {
           const result = await driver.query(query);
           const createStatement = result[0]["Create View"];
-          const cleanStatement = this.convertKeywordsToUppercase(createStatement);
+          const cleanStatement = driver.getDDLParser().normalize(createStatement);
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, 'views', viewName, cleanStatement);
           exportedData.push({ name: viewName, ddl: cleanStatement });
@@ -357,8 +354,7 @@ module.exports = class ExporterService {
             continue;
           }
 
-          const rmvAIregex = /AUTO_INCREMENT=\d+\s/;
-          const cleanStatement = createStatement.replace(rmvAIregex, "");
+          const cleanStatement = driver.getDDLParser().normalize(createStatement);
           this.appendDDL(dbConfig.envName, ddlFolderPath, TABLES, tableName, cleanStatement);
 
           exportedData.push({
@@ -404,7 +400,7 @@ module.exports = class ExporterService {
         try {
           const result = await driver.query(query);
           const createStatement = result[0]["Create Event"];
-          let cleanStatement = this.convertKeywordsToUppercase(createStatement);
+          let cleanStatement = driver.getDDLParser().normalize(createStatement);
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, EVENTS, eventName, cleanStatement);
           exportedData.push({ name: eventName, ddl: cleanStatement });
@@ -462,49 +458,7 @@ module.exports = class ExporterService {
     this.fileManager.saveToFile(ddlFolderPath, `${ddlName}.sql`, createStatement);
   }
 
-  /**
-   * This function converts keywords in a query to uppercase.
-   * It takes a query as input and returns the converted query with uppercase keywords.
-   * Certain keywords are excluded from conversion, such as GROUP and USER, which are converted to lowercase.
-   * The function also removes unnecessary characters and replaces tabs with spaces.
-   */
-  convertKeywordsToUppercase(query) {
-    const keywords = [
-      ...new Set([
-        "ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC", "ASENSITIVE", "BEFORE", "BETWEEN", "BIGINT", "BINARY", "BLOB", "BOTH", "BY", "CALL",
-        "CASCADE", "CASE", "CHANGE", "CHAR", "CHARACTER", "CHECK", "COLLATE", "COLUMN", "CONDITION", "CONSTRAINT", "CONTINUE", "CONVERT", "CREATE", "CROSS",
-        "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_USER", "CURSOR", "DATABASE", "DATABASES", "DAY_HOUR", "DAY_MICROSECOND", "DAY_MINUTE",
-        "DAY_SECOND", "DEC", "DECIMAL", "DECLARE", "DEFAULT", "DELAYED", "DELETE", "DESC", "DESCRIBE", "DETERMINISTIC", "DISTINCT", "DISTINCTROW", "DIV", "DOUBLE",
-        "DROP", "DUAL", "EACH", "ELSE", "ELSEIF", "ENCLOSED", "ESCAPED", "EXISTS", "EXIT", "EXPLAIN", "FALSE", "FETCH", "FLOAT", "FLOAT4", "FLOAT8", "FORCE",
-        "FOREIGN", "FROM", "FULLTEXT", "GENERATED", "GET", "GRANT", "GROUP", "HAVING", "HIGH_PRIORITY", "HOUR_MICROSECOND", "HOUR_MINUTE", "HOUR_SECOND", "IF",
-        "IGNORE", "IGNORE_SERVER_IDS", "IN", "INDEX", "INFILE", "INNER", "INOUT", "INSENSITIVE", "INSERT", "INT", "INT1", "INT2", "INT3", "INT4", "INT8", "INTEGER", "INTERVAL",
-        "INTO", "IO_AFTER_GTIDS", "IO_BEFORE_GTIDS", "IS", "ITERATE", "JOIN", "KEY", "KEYS", "KILL", "LEADING", "LEAVE", "LEFT", "LIKE", "LIMIT", "LINEAR", "LINES", "LOAD",
-        "LOCALTIME", "LOCALTIMESTAMP", "LOCK", "LONG", "LONGBLOB", "LONGTEXT", "LOOP", "LOW_PRIORITY", "MASTER_BIND", "MASTER_SSL_VERIFY_SERVER_CERT", "MATCH", "MAXVALUE",
-        "MEDIUMBLOB", "MEDIUMINT", "MEDIUMTEXT", "MIDDLEINT", "MINUTE_MICROSECOND", "MINUTE_SECOND", "MOD", "MODIFIES", "NATURAL", "NOT", "NO_WRITE_TO_BINLOG", "NULL", "NUMERIC",
-        "ON", "OPTIMIZE", "OPTION", "OPTIONALLY", "OR", "ORDER", "OUT", "OUTER", "OUTFILE", "PARTITION", "PRECISION", "PRIMARY", "PROCEDURE", "PURGE", "RANGE", "READ", "READS",
-        "READ_WRITE", "REAL", "REFERENCES", "REGEXP", "RELEASE", "RENAME", "REPEAT", "REPLACE", "REQUIRE", "RESIGNAL", "RESTRICT", "RETURN", "REVOKE", "RIGHT", "RLIKE", "SCHEMA",
-        "SCHEMAS", "SECOND_MICROSECOND", "SELECT", "SENSITIVE", "SEPARATOR", "SET", "SHOW", "SIGNAL", "SMALLINT", "SPATIAL", "SPECIFIC", "SQL", "SQLEXCEPTION", "SQLSTATE",
-        "SQLWARNING", "SQL_BIG_RESULT", "SQL_CALC_FOUND_ROWS", "SQL_SMALL_RESULT", "SSL", "STARTING", "STORED", "STRAIGHT_JOIN", "TABLE", "TERMINATED", "TEXT", "THEN",
-        "TINYBLOB", "TINYINT", "TINYTEXT", "TO", "TRAILING", "TRIGGER", "TRUE", "UNDO", "UNION", "UNIQUE", "UNLOCK", "UNSIGNED", "UPDATE", "USAGE", "USE", "USING",
-        "UTC_DATE", "UTC_TIME", "UTC_TIMESTAMP", "VALUES", "VARBINARY", "VARCHAR", "VARCHARACTER", "VARYING", "VIRTUAL", "WHEN", "WHERE", "WHILE", "WITH", "WRITE",
-        "XOR", "YEAR_MONTH", "ZEROFILL", "END", "OPEN", "CLOSE", "DUPLICATE", "COALESCE",
-      ]),
-    ];
-    // Split the query into individual words
-    const words = query.split(/\b/);
-    // Convert keywords to uppercase
-    const convertedQuery = words
-      .map((word) =>
-        keywords.includes(word.toUpperCase()) ? word.toUpperCase() : word,
-      )
-      .join("")
-      .replace(/\`(GROUP|USER|GROUPS)\`/g, (match, p1) => `\`${p1.toLowerCase()}\``)
-      .replace(/\t/g, "  ");
 
-    // Use robust DDLParser to clean DEFINER instead of simple regex
-    // .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ");
-    return DDLParser.cleanDefiner(convertedQuery);
-  }
 
   /**
    * Exporter function that exports the specified DDL (Data Definition Language) from a MySQL database.
