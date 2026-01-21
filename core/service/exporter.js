@@ -9,7 +9,6 @@
  * Copyright (c) 2024 ph4n4n
  * https://github.com/ph4n4n/@anph/core
  */
-const mysql = require("mysql2");
 const {
   DDL: { TRIGGERS, TABLES, VIEWS, PROCEDURES, FUNCTIONS, EVENTS }
 } = require("../configs/constants");
@@ -21,7 +20,6 @@ const { DDLParser } = require('../utils');
 //   emptyDirectory,
 //   readFromFile,
 // } = require("../utils/file.helper");
-const util = require("util");
 
 module.exports = class ExporterService {
   constructor(dependencies) {
@@ -65,72 +63,63 @@ module.exports = class ExporterService {
    * @param {*} dbConfig - The database configuration.
    * @returns {Promise} - A promise that resolves with the number of exported triggers.
    */
-  async exportTriggers(connection, dbConfig, specificName = null) {
-    return new Promise((resolve, reject) => {
-      // Retrieve the database path and prepare the DDL folder
-      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
-      const ddlFolderPath = this.makeDDLFolderReady(dbPath, TRIGGERS, specificName);
-      // Query the database for trigger information
-      const triggerQuery = specificName ? `SHOW TRIGGERS LIKE '${specificName}'` : "SHOW TRIGGERS";
-      connection.query(triggerQuery, async (err, triggerResults) => {
-        if (err) {
-          if (global.logger) global.logger.error("Error retrieving triggers: ", err);
-          connection.end();
-          reject(err);
-          return;
-        }
+  async exportTriggers(driver, dbConfig, specificName = null) {
+    const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+    const ddlFolderPath = this.makeDDLFolderReady(dbPath, TRIGGERS, specificName);
+    const triggerQuery = specificName ? `SHOW TRIGGERS LIKE '${specificName}'` : "SHOW TRIGGERS";
 
-        if (!specificName) {
-          await this.appendReport(dbConfig.envName, {
-            triggers_total: triggerResults.length,
-          });
-        }
+    try {
+      const triggerResults = await driver.query(triggerQuery);
 
-        // NEW: Collect exported data
-        const exportedData = [];
-
-        // Export triggers to separate files
-        for (const row of triggerResults) {
-          const triggerName = row.Trigger;
-          const query = `SHOW CREATE TRIGGER \`${triggerName}\``;
-          try {
-            const result = await util.promisify(connection.query).call(connection, query);
-            const createStatement = result[0]["SQL Original Statement"];
-
-            // Format trigger definition
-            const formattedStatement = this.convertKeywordsToUppercase(createStatement)
-              .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ")
-              .replace(/\sCOLLATE\s+\w+\s/, " ")
-              .replace(/\sCHARSET\s+\w+\s/, " ");
-
-            this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
-
-            exportedData.push({
-              name: triggerName,
-              ddl: formattedStatement
-            });
-          } catch (error) {
-            if (global.logger) global.logger.error(`Error exporting trigger ${triggerName}:`, error);
-          }
-        }
-
-        // NEW: Save to Storage
-        if (this.storage) {
-          await this.storage.saveExport(
-            dbConfig.envName,
-            this.getDBName(dbConfig.envName),
-            TRIGGERS,
-            exportedData,
-            !specificName
-          );
-        }
-
-        return resolve({
-          count: triggerResults.length,
-          data: exportedData
+      if (!specificName) {
+        await this.appendReport(dbConfig.envName, {
+          triggers_total: triggerResults.length,
         });
-      });
-    });
+      }
+
+      const exportedData = [];
+
+      for (const row of triggerResults) {
+        const triggerName = row.Trigger;
+        const query = `SHOW CREATE TRIGGER \`${triggerName}\``;
+        try {
+          const result = await driver.query(query);
+          const createStatement = result[0]["SQL Original Statement"];
+
+          const formattedStatement = this.convertKeywordsToUppercase(createStatement)
+            .replace(/\sDEFINER=`[^`]+`@`[^`]+`\s/g, " ")
+            .replace(/\sCOLLATE\s+\w+\s/, " ")
+            .replace(/\sCHARSET\s+\w+\s/, " ");
+
+          this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
+
+          exportedData.push({
+            name: triggerName,
+            ddl: formattedStatement
+          });
+        } catch (error) {
+          if (global.logger) global.logger.error(`Error exporting trigger ${triggerName}:`, error);
+        }
+      }
+
+      if (this.storage) {
+        await this.storage.saveExport(
+          dbConfig.envName,
+          this.getDBName(dbConfig.envName),
+          TRIGGERS,
+          exportedData,
+          !specificName
+        );
+      }
+
+      return {
+        count: triggerResults.length,
+        data: exportedData
+      };
+    } catch (err) {
+      if (global.logger) global.logger.error("Error retrieving triggers: ", err);
+      throw err;
+    }
   }
 
   /**
@@ -140,98 +129,71 @@ module.exports = class ExporterService {
    * @param {*} dbConfig The database configuration.
    * @returns {Promise} A promise that resolves with the number of exported functions.
    */
-  async exportFunctions(connection, dbConfig, specificName = null) {
+  async exportFunctions(driver, dbConfig, specificName = null) {
     const self = this;
-    return new Promise((resolve, reject) => {
-      // Retrieve the database path and prepare the DDL folder
-      const dbPath = `db/${dbConfig.envName}/${self.getDBName(dbConfig.envName)}`;
-      const ddlFolderPath = self.makeDDLFolderReady(dbPath, FUNCTIONS, specificName);
-      // Query the database for function information
-      const functionQuery = specificName
-        ? `SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?) AND Name = ?`
-        : "SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?)";
-      const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+    const dbPath = `db/${dbConfig.envName}/${self.getDBName(dbConfig.envName)}`;
+    const ddlFolderPath = self.makeDDLFolderReady(dbPath, FUNCTIONS, specificName);
 
-      connection.query(
-        functionQuery,
-        queryParams,
-        async function (err, functionResults) {
-          if (err) {
-            if (global.logger) global.logger.error("Error retrieving functions: ", err);
-            connection.end();
-            reject(err);
-            return;
+    const functionQuery = specificName
+      ? `SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?) AND Name = ?`
+      : "SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?)";
+    const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+
+    try {
+      const functionResults = await driver.query(functionQuery, queryParams);
+
+      if (!specificName) {
+        await self.appendReport(dbConfig.envName, {
+          functions_total: functionResults.length,
+        });
+      }
+
+      const exportedData = [];
+
+      for (const row of functionResults) {
+        const fnName = row.Name || row.name || Object.values(row)[1];
+        const query = `SHOW CREATE FUNCTION \`${fnName}\``;
+
+        try {
+          const result = await driver.query(query);
+          const createStatement = result[0]["Create Function"];
+
+          if (!createStatement) {
+            if (global.logger) global.logger.warn(`Skipping function ${fnName}: No CREATE FUNCTION statement found`);
+            continue;
           }
 
-          if (!specificName) {
-            await self.appendReport(dbConfig.envName, {
-              functions_total: functionResults.length,
-            });
-          }
+          const cleanStatement = self.convertKeywordsToUppercase(createStatement);
 
-          // NEW: Collect exported data
-          const exportedData = [];
+          self.appendDDL(dbConfig.envName, ddlFolderPath, FUNCTIONS, fnName, cleanStatement);
 
-          for (const row of functionResults) {
-            const fnName = row.Name || row.name || Object.values(row)[1]; // Usually 2nd col is Name
-            const query = `SHOW CREATE FUNCTION \`${fnName}\``;
-
-            try {
-              const result = await util
-                .promisify(connection.query)
-                .call(connection, query);
-
-              const createStatement = result[0]["Create Function"];
-
-              if (!createStatement) {
-                if (global.logger) {
-                  global.logger.warn(`Skipping function ${fnName}: No CREATE FUNCTION statement found`);
-                }
-                continue;
-              }
-
-              const cleanStatement = self.convertKeywordsToUppercase(createStatement);
-
-              // Write to file (keep for CLI/git)
-              self.appendDDL(
-                dbConfig.envName,
-                ddlFolderPath,
-                FUNCTIONS,
-                fnName,
-                cleanStatement,
-              );
-
-              // NEW: Collect data
-              exportedData.push({
-                name: fnName,
-                ddl: cleanStatement
-              });
-            } catch (fnError) {
-              if (global.logger) {
-                global.logger.error(`Error exporting function ${fnName}:`, fnError.message);
-              }
-            }
-          }
-
-          // NEW: Save to Storage (if available)
-          if (self.storage) {
-            await self.storage.saveExport(
-              dbConfig.envName,
-              self.getDBName(dbConfig.envName),
-              FUNCTIONS,
-              exportedData,
-              !specificName
-            );
-          }
-
-          // NEW: Return both count and data
-          return resolve({
-            count: functionResults.length,
-            data: exportedData
+          exportedData.push({
+            name: fnName,
+            ddl: cleanStatement
           });
+        } catch (fnError) {
+          if (global.logger) global.logger.error(`Error exporting function ${fnName}:`, fnError.message);
         }
-      );
-    });
+      }
+
+      if (self.storage) {
+        await self.storage.saveExport(
+          dbConfig.envName,
+          self.getDBName(dbConfig.envName),
+          FUNCTIONS,
+          exportedData,
+          !specificName
+        );
+      }
+
+      return {
+        count: functionResults.length,
+        data: exportedData
+      };
+    } catch (err) {
+      if (global.logger) global.logger.error("Error retrieving functions: ", err);
+      throw err;
+    }
   }
 
   /**
@@ -240,320 +202,226 @@ module.exports = class ExporterService {
    * @param {*} dbConfig - The database configuration.
    * @returns {Promise<number>} - A promise that resolves to the number of procedures exported.
    */
-  async exportProcedures(connection, dbConfig, specificName = null) {
-    return new Promise((resolve, reject) => {
-      // Retrieve the database path and prepare the DDL folder
-      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
-      const ddlFolderPath = this.makeDDLFolderReady(dbPath, PROCEDURES, specificName);
+  async exportProcedures(driver, dbConfig, specificName = null) {
+    const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+    const ddlFolderPath = this.makeDDLFolderReady(dbPath, PROCEDURES, specificName);
 
-      // Query the database for procedure information
-      const procedureQuery = specificName
-        ? `SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?) AND Name = ?`
-        : "SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?)";
-      const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+    const procedureQuery = specificName
+      ? `SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?) AND Name = ?`
+      : "SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?)";
+    const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
 
-      connection.query(
-        procedureQuery,
-        queryParams,
-        async (err, procedureResults) => {
-          if (err) {
-            if (global.logger) global.logger.error("Error retrieving procedures: ", err);
-            connection.end();
-            reject(err);
-            return;
+    try {
+      const procedureResults = await driver.query(procedureQuery, queryParams);
+
+      if (!specificName) {
+        await this.appendReport(dbConfig.envName, {
+          procedures_total: procedureResults.length,
+        });
+      }
+
+      const exportedData = [];
+
+      for (const row of procedureResults) {
+        const spName = row.Name || row.name || Object.values(row)[1];
+        const query = `SHOW CREATE PROCEDURE \`${spName}\``;
+
+        try {
+          const result = await driver.query(query);
+          const createStatement = result[0]["Create Procedure"];
+
+          if (!createStatement) {
+            if (global.logger) global.logger.warn(`Skipping procedure ${spName}: No CREATE PROCEDURE statement found`);
+            continue;
           }
 
-          if (!specificName) {
-            await this.appendReport(dbConfig.envName, {
-              procedures_total: procedureResults.length,
-            });
-          }
+          const cleanStatement = this.convertKeywordsToUppercase(createStatement);
 
-          // NEW: Collect exported data
-          const exportedData = [];
+          this.appendDDL(dbConfig.envName, ddlFolderPath, PROCEDURES, spName, cleanStatement);
 
-          for (const row of procedureResults) {
-            const spName = row.Name || row.name || Object.values(row)[1];
-            const query = `SHOW CREATE PROCEDURE \`${spName}\``;
-
-            try {
-              const result = await util
-                .promisify(connection.query)
-                .call(connection, query);
-
-              const createStatement = result[0]["Create Procedure"];
-
-              if (!createStatement) {
-                if (global.logger) {
-                  global.logger.warn(`Skipping procedure ${spName}: No CREATE PROCEDURE statement found`);
-                }
-                continue;
-              }
-
-              const cleanStatement = this.convertKeywordsToUppercase(createStatement);
-
-              // Write to file (keep for CLI/git)
-              this.appendDDL(
-                dbConfig.envName,
-                ddlFolderPath,
-                PROCEDURES,
-                spName,
-                cleanStatement,
-              );
-
-              // NEW: Collect data
-              exportedData.push({
-                name: spName,
-                ddl: cleanStatement
-              });
-            } catch (spError) {
-              if (global.logger) {
-                global.logger.error(`Error exporting procedure ${spName}:`, spError.message);
-              }
-            }
-          }
-
-          // NEW: Save to Storage (if available)
-          if (this.storage) {
-            await this.storage.saveExport(
-              dbConfig.envName,
-              this.getDBName(dbConfig.envName),
-              PROCEDURES,
-              exportedData,
-              !specificName
-            );
-          }
-
-          // NEW: Return both count and data
-          return resolve({
-            count: procedureResults.length,
-            data: exportedData
+          exportedData.push({
+            name: spName,
+            ddl: cleanStatement
           });
-        },
-      );
-    });
+        } catch (spError) {
+          if (global.logger) global.logger.error(`Error exporting procedure ${spName}:`, spError.message);
+        }
+      }
+
+      if (this.storage) {
+        await this.storage.saveExport(
+          dbConfig.envName,
+          this.getDBName(dbConfig.envName),
+          PROCEDURES,
+          exportedData,
+          !specificName
+        );
+      }
+
+      return {
+        count: procedureResults.length,
+        data: exportedData
+      };
+    } catch (err) {
+      if (global.logger) global.logger.error("Error retrieving procedures: ", err);
+      throw err;
+    }
   }
 
   /**
    * @param {*} connection
    * @returns
    */
-  async exportViews(connection, dbConfig, specificName = null) {
-    return new Promise((resolve, reject) => {
-      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
-      const ddlFolderPath = this.makeDDLFolderReady(dbPath, 'views', specificName);
-      const viewQuery = specificName
-        ? `SHOW FULL TABLES WHERE Table_type = 'VIEW' AND \`Tables_in_${dbConfig.database}\` = ?`
-        : "SHOW FULL TABLES WHERE Table_type = 'VIEW'";
-      const queryParams = specificName ? [specificName] : [];
+  async exportViews(driver, dbConfig, specificName = null) {
+    const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+    const ddlFolderPath = this.makeDDLFolderReady(dbPath, 'views', specificName);
+    const viewQuery = specificName
+      ? `SHOW FULL TABLES WHERE Table_type = 'VIEW' AND \`Tables_in_${dbConfig.database}\` = ?`
+      : "SHOW FULL TABLES WHERE Table_type = 'VIEW'";
+    const queryParams = specificName ? [specificName] : [];
 
-      connection.query(viewQuery, queryParams, async (err, viewResults) => {
-        if (err) {
-          if (global.logger) global.logger.error("Error retrieving views: ", err);
-          connection.end();
-          reject(err);
-          return;
-        }
+    try {
+      const viewResults = await driver.query(viewQuery, queryParams);
+
+      if (!specificName) {
+        await this.appendReport(dbConfig.envName, { views_total: viewResults.length });
+      }
+      const exportedData = [];
+
+      for (const row of viewResults) {
+        const viewName = Object.values(row)[0];
+        const query = `SHOW CREATE VIEW \`${viewName}\``;
 
         try {
-          if (!specificName) {
-            await this.appendReport(dbConfig.envName, { views_total: viewResults.length });
-          }
-          const exportedData = [];
+          const result = await driver.query(query);
+          const createStatement = result[0]["Create View"];
+          const cleanStatement = this.convertKeywordsToUppercase(createStatement);
 
-          for (const row of viewResults) {
-            const viewName = Object.values(row)[0];
-            const query = `SHOW CREATE VIEW \`${viewName}\``;
-
-            try {
-              const result = await util.promisify(connection.query).call(connection, query);
-              const createStatement = result[0]["Create View"];
-              const cleanStatement = this.convertKeywordsToUppercase(createStatement);
-
-              this.appendDDL(dbConfig.envName, ddlFolderPath, 'views', viewName, cleanStatement);
-              exportedData.push({ name: viewName, ddl: cleanStatement });
-            } catch (viewError) {
-              if (global.logger) global.logger.error(`Error exporting view ${viewName}:`, viewError);
-            }
-          }
-
-          if (this.storage) {
-            await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), 'views', exportedData, !specificName);
-          }
-
-          return resolve({ count: viewResults.length, data: exportedData });
-        } catch (error) {
-          if (global.logger) global.logger.error("Error in exportViews:", error);
-          return reject(error);
+          this.appendDDL(dbConfig.envName, ddlFolderPath, 'views', viewName, cleanStatement);
+          exportedData.push({ name: viewName, ddl: cleanStatement });
+        } catch (viewError) {
+          if (global.logger) global.logger.error(`Error exporting view ${viewName}:`, viewError);
         }
-      });
-    });
+      }
+
+      if (this.storage) {
+        await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), 'views', exportedData, !specificName);
+      }
+
+      return { count: viewResults.length, data: exportedData };
+    } catch (error) {
+      if (global.logger) global.logger.error("Error in exportViews:", error);
+      throw error;
+    }
   }
 
-  async exportTables(connection, dbConfig, specificName = null) {
-    return new Promise((resolve, reject) => {
-      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
-      const ddlFolderPath = this.makeDDLFolderReady(dbPath, TABLES, specificName);
-      const tableQuery = specificName
-        ? `SHOW TABLES LIKE ?`
-        : "SHOW TABLES";
-      const queryParams = specificName ? [specificName] : [];
+  async exportTables(driver, dbConfig, specificName = null) {
+    const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+    const ddlFolderPath = this.makeDDLFolderReady(dbPath, TABLES, specificName);
+    const tableQuery = specificName
+      ? `SHOW TABLES LIKE ?`
+      : "SHOW TABLES";
+    const queryParams = specificName ? [specificName] : [];
 
-      connection.query(tableQuery, queryParams, async (err, tableResults) => {
-        if (err) {
-          if (global.logger) global.logger.error("Error retrieving tables: ", err);
-          connection.end();
-          reject(err);
-          return;
-        }
+    try {
+      const tableResults = await driver.query(tableQuery, queryParams);
+
+      if (!specificName) {
+        await this.appendReport(dbConfig.envName, {
+          tables_total: tableResults.length,
+        });
+      }
+
+      const exportedData = [];
+
+      for (const row of tableResults) {
+        const tableName = Object.values(row)[0];
+        const query = `SHOW CREATE TABLE \`${tableName}\``;
 
         try {
-          if (!specificName) {
-            await this.appendReport(dbConfig.envName, {
-              tables_total: tableResults.length,
-            });
+          const result = await driver.query(query);
+
+          if (!result || !result[0]) {
+            if (global.logger) global.logger.error(`Empty result for table: ${tableName}`);
+            continue;
           }
 
-          // NEW: Collect exported data
-          const exportedData = [];
+          const createStatement = result[0]["Create Table"];
 
-          // Export tables to separate files
-          for (const row of tableResults) {
-            const tableName = Object.values(row)[0];
-            const query = `SHOW CREATE TABLE \`${tableName}\``;
-
-            try {
-              const result = await util
-                .promisify(connection.query)
-                .call(connection, query);
-
-              // Validate result
-              if (!result || !result[0]) {
-                if (global.logger) {
-                  global.logger.error(`Empty result for table: ${tableName}`);
-                }
-                continue;
-              }
-
-              const createStatement = result[0]["Create Table"];
-
-              // Validate createStatement
-              if (!createStatement) {
-                // This is likely a VIEW, not a TABLE - skip it
-                if (global.logger && result[0]['Create View']) {
-                  global.logger.warn(`Skipping VIEW: ${tableName} (use export views command for views)`);
-                } else if (global.logger) {
-                  global.logger.error(`No "Create Table" in result for: ${tableName}`);
-                  global.logger.error('Result keys:', Object.keys(result[0]));
-                }
-                continue;
-              }
-
-              const rmvAIregex = /AUTO_INCREMENT=\d+\s/;
-              const cleanStatement = createStatement.replace(rmvAIregex, "");
-
-              // Write to file (keep for CLI/git)
-              this.appendDDL(
-                dbConfig.envName,
-                ddlFolderPath,
-                TABLES,
-                tableName,
-                cleanStatement,
-              );
-
-              // NEW: Collect data
-              exportedData.push({
-                name: tableName,
-                ddl: cleanStatement
-              });
-            } catch (tableError) {
-              if (global.logger) {
-                global.logger.error(`Error exporting table ${tableName}:`, tableError);
-              }
-              // Continue with next table
+          if (!createStatement) {
+            if (global.logger && result[0]['Create View']) {
+              global.logger.warn(`Skipping VIEW: ${tableName} (use export views command for views)`);
+            } else if (global.logger) {
+              global.logger.error(`No "Create Table" in result for: ${tableName}`);
             }
+            continue;
           }
 
-          // NEW: Save to Storage (if available)
-          if (this.storage) {
-            await this.storage.saveExport(
-              dbConfig.envName,
-              this.getDBName(dbConfig.envName),
-              TABLES,
-              exportedData,
-              !specificName
-            );
-          }
+          const rmvAIregex = /AUTO_INCREMENT=\d+\s/;
+          const cleanStatement = createStatement.replace(rmvAIregex, "");
+          this.appendDDL(dbConfig.envName, ddlFolderPath, TABLES, tableName, cleanStatement);
 
-          // NEW: Return both count and data
-          return resolve({
-            count: tableResults.length,
-            data: exportedData
+          exportedData.push({
+            name: tableName,
+            ddl: cleanStatement
           });
-        } catch (error) {
-          if (global.logger) {
-            global.logger.error("Error in exportTables:", error);
-          }
-          return reject(error);
+        } catch (tableError) {
+          if (global.logger) global.logger.error(`Error exporting table ${tableName}:`, tableError);
         }
-      });
-    });
+      }
+
+      if (this.storage) {
+        await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), TABLES, exportedData, !specificName);
+      }
+
+      return { count: tableResults.length, data: exportedData };
+    } catch (error) {
+      if (global.logger) global.logger.error("Error in exportTables:", error);
+      throw error;
+    }
   }
 
-  async exportEvents(connection, dbConfig, specificName = null) {
-    return new Promise((resolve, reject) => {
-      const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
-      const ddlFolderPath = this.makeDDLFolderReady(dbPath, EVENTS, specificName);
+  async exportEvents(driver, dbConfig, specificName = null) {
+    const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
+    const ddlFolderPath = this.makeDDLFolderReady(dbPath, EVENTS, specificName);
+    const eventQuery = specificName
+      ? `SHOW EVENTS WHERE Db = ? AND Name = ?`
+      : `SHOW EVENTS WHERE Db = ?`;
+    const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
 
-      const eventQuery = specificName
-        ? `SHOW EVENTS WHERE Db = ? AND Name = ?`
-        : `SHOW EVENTS WHERE Db = ?`;
-      const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+    try {
+      const eventResults = await driver.query(eventQuery, queryParams);
 
-      connection.query(eventQuery, queryParams, async (err, eventResults) => {
-        if (err) {
-          if (global.logger) global.logger.error("Error retrieving events: ", err);
-          connection.end();
-          reject(err);
-          return;
-        }
+      if (!specificName) {
+        await this.appendReport(dbConfig.envName, { events_total: eventResults.length });
+      }
+      const exportedData = [];
+
+      for (const row of eventResults) {
+        const eventName = row.Name;
+        const query = `SHOW CREATE EVENT \`${eventName}\``;
 
         try {
-          if (!specificName) {
-            await this.appendReport(dbConfig.envName, { events_total: eventResults.length });
-          }
-          const exportedData = [];
+          const result = await driver.query(query);
+          const createStatement = result[0]["Create Event"];
+          let cleanStatement = this.convertKeywordsToUppercase(createStatement);
 
-          for (const row of eventResults) {
-            const eventName = row.Name;
-            const query = `SHOW CREATE EVENT \`${eventName}\``;
-
-            try {
-              const result = await util.promisify(connection.query).call(connection, query);
-              const createStatement = result[0]["Create Event"];
-
-              // Normalize: cleanup DEFINER and ON SCHEDULE if strictly needed, 
-              // but for events the SCHEDULE is part of important logic.
-              let cleanStatement = this.convertKeywordsToUppercase(createStatement);
-
-              this.appendDDL(dbConfig.envName, ddlFolderPath, EVENTS, eventName, cleanStatement);
-              exportedData.push({ name: eventName, ddl: cleanStatement });
-            } catch (eventError) {
-              if (global.logger) global.logger.error(`Error exporting event ${eventName}:`, eventError);
-            }
-          }
-
-          if (this.storage) {
-            await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), EVENTS, exportedData, !specificName);
-          }
-
-          return resolve({ count: eventResults.length, data: exportedData });
-        } catch (error) {
-          if (global.logger) global.logger.error("Error in exportEvents:", error);
-          return reject(error);
+          this.appendDDL(dbConfig.envName, ddlFolderPath, EVENTS, eventName, cleanStatement);
+          exportedData.push({ name: eventName, ddl: cleanStatement });
+        } catch (eventError) {
+          if (global.logger) global.logger.error(`Error exporting event ${eventName}:`, eventError);
         }
-      });
-    });
+      }
+
+      if (this.storage) {
+        await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), EVENTS, exportedData, !specificName);
+      }
+
+      return { count: eventResults.length, data: exportedData };
+    } catch (error) {
+      if (global.logger) global.logger.error("Error in exportEvents:", error);
+      throw error;
+    }
   }
 
   async appendDDL(
@@ -655,83 +523,79 @@ module.exports = class ExporterService {
         global.logger.warn(`Start exporting ${ddl} changes for...`, env);
       }
 
-      // Create a MySQL connection
-      const connection = mysql.createConnection({
+      // Create Driver instance (Factory method)
+      // Map dbConfig to Driver Config
+      const driverConfig = {
         host: dbConfig.host,
         database: dbConfig.database,
         user: dbConfig.user,
         password: dbConfig.password,
-        port: dbConfig.port,
-      });
+        port: dbConfig.port
+      };
 
+      const driver = this.driver(driverConfig);
 
-      // Connect to the MySQL server - use Promise wrapper
+      // Connect to the database
       return new Promise((resolve, reject) => {
-        connection.connect(async (err) => {
-          if (err) {
-            if (global.logger) {
-              global.logger.error("Error connecting to the database: ", err);
+        driver.connect()
+          .then(async () => {
+            try {
+              // Retrieve the list of DDL
+              let result;
+              // Pass 'driver' instead of 'connection'
+              switch (ddl) {
+                case TABLES:
+                  result = await this.exportTables(driver, dbConfig, specificName);
+                  break;
+                case VIEWS:
+                  result = await this.exportViews(driver, dbConfig, specificName);
+                  break;
+                case FUNCTIONS:
+                  result = await this.exportFunctions(driver, dbConfig, specificName);
+                  break;
+                case PROCEDURES:
+                  result = await this.exportProcedures(driver, dbConfig, specificName);
+                  break;
+                case TRIGGERS:
+                  result = await this.exportTriggers(driver, dbConfig, specificName);
+                  break;
+                case EVENTS:
+                  result = await this.exportEvents(driver, dbConfig, specificName);
+                  break;
+              }
+
+              // Close the connection
+              await driver.disconnect();
+
+              const duration = Date.now() - startTime;
+
+              // Extract count and data from result
+              const count = typeof result === 'object' && result.count !== undefined ? result.count : result;
+              const data = typeof result === 'object' && result.data !== undefined ? result.data : [];
+
+              // Log if logger available
+              if (global.logger) {
+                global.logger.info(`\nThere are ${count} ${ddl} exported in ${duration}ms`);
+              }
+
+              // Return structured data
+              resolve({
+                success: true,
+                ddl,
+                env,
+                database: this.getDBName(env),
+                count,
+                data,
+                duration
+              });
+            } catch (error) {
+              connection.end();
+              if (global.logger) {
+                global.logger.error(`Export failed: ${error.message}`);
+              }
+              reject(error);
             }
-            reject(new Error(`Database connection failed: ${err.message}`));
-            return;
-          }
-
-          try {
-            // Retrieve the list of DDL
-            let result;
-            switch (ddl) {
-              case TABLES:
-                result = await this.exportTables(connection, dbConfig, specificName);
-                break;
-              case VIEWS:
-                result = await this.exportViews(connection, dbConfig, specificName);
-                break;
-              case FUNCTIONS:
-                result = await this.exportFunctions(connection, dbConfig, specificName);
-                break;
-              case PROCEDURES:
-                result = await this.exportProcedures(connection, dbConfig, specificName);
-                break;
-              case TRIGGERS:
-                result = await this.exportTriggers(connection, dbConfig, specificName);
-                break;
-              case EVENTS:
-                result = await this.exportEvents(connection, dbConfig, specificName);
-                break;
-            }
-
-            // Close the MySQL connection
-            connection.end();
-
-            const duration = Date.now() - startTime;
-
-            // Extract count and data from result
-            const count = typeof result === 'object' && result.count !== undefined ? result.count : result;
-            const data = typeof result === 'object' && result.data !== undefined ? result.data : [];
-
-            // Log if logger available
-            if (global.logger) {
-              global.logger.info(`\nThere are ${count} ${ddl} exported in ${duration}ms`);
-            }
-
-            // Return structured data
-            resolve({
-              success: true,
-              ddl,
-              env,
-              database: this.getDBName(env),
-              count,
-              data,
-              duration
-            });
-          } catch (error) {
-            connection.end();
-            if (global.logger) {
-              global.logger.error(`Export failed: ${error.message}`);
-            }
-            reject(error);
-          }
-        });
+          });
       });
     };
   }

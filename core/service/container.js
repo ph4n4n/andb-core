@@ -10,10 +10,10 @@
  * https://github.com/ph4n4n/@anph/core
  */
 const [EXPORTER, COMPARATOR, MIGRATOR, MONITOR,
-  REPORT_HELPER, FILE_MANAGER, DB_UTIL_FN, BASE_DIR, STORAGE,
+  REPORT_HELPER, FILE_MANAGER, DB_UTIL_FN, BASE_DIR, STORAGE, DRIVER
 ] = [
     'exporter', 'comparator', 'migrator', 'monitor',
-    'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir', 'storage'
+    'reportHelper', 'fileManager', 'dbUtilFn', 'baseDir', 'storage', 'driver'
   ];
 const ExporterService = require('./exporter');
 const ComparatorService = require('./comparator');
@@ -35,6 +35,7 @@ module.exports = class Container {
       .addBaseDirectory()
       .createFileManager()
       .createStorage()
+      .createDriver() // NEW: Driver abstraction
       .buildReportHelper()
       .buildExporter()
       .buildComparator()
@@ -42,13 +43,16 @@ module.exports = class Container {
       .buildMonitor();
   }
 
+  // ... (buildMonitor, buildMigrator, buildComparator omitted/unchanged for now, focusing on Exporter first)
+
   buildMonitor() {
     this.services.set(MONITOR, (container) => {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
+      const driver = container.get(DRIVER); // Inject Driver
 
       return (field) => {
-        const monitorService = new MonitorService({ ...dbUtilFn, fileManager });
+        const monitorService = new MonitorService({ ...dbUtilFn, fileManager, driver });
         return monitorService.monitor(field);
       };
     });
@@ -60,10 +64,13 @@ module.exports = class Container {
       const dbUtilFn = container.get(DB_UTIL_FN);
       const fileManager = container.get(FILE_MANAGER);
       const storage = container.get(STORAGE);
+      const driver = container.get(DRIVER); // Inject Driver
+
       const migratorService = new MigratorService({
         ...dbUtilFn,
         fileManager,
         storage,
+        driver,
         isNotMigrateCondition: this.config.isNotMigrateCondition
       });
 
@@ -78,6 +85,8 @@ module.exports = class Container {
       const reportHelper = container.get(REPORT_HELPER);
       const fileManager = container.get(FILE_MANAGER);
       const storage = container.get(STORAGE);
+      const driver = container.get(DRIVER); // Inject Driver
+
       const comparatorService = new ComparatorService({
         ...dbUtilFn,
         appendReport: reportHelper.appendReport.bind(reportHelper),
@@ -86,6 +95,7 @@ module.exports = class Container {
         vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
         fileManager,
         storage,
+        driver,
         domainNormalization: this.config.domainNormalization
       });
       return (ddl, name = null) => comparatorService.compare(ddl, name);
@@ -99,6 +109,8 @@ module.exports = class Container {
       const reportHelper = container.get(REPORT_HELPER);
       const fileManager = container.get(FILE_MANAGER);
       const storage = container.get(STORAGE);
+      const driver = container.get(DRIVER); // NEW: Inject Driver
+
       const exporterService = new ExporterService({
         ...dbUtilFn,
         appendReport: reportHelper.appendReport.bind(reportHelper),
@@ -107,6 +119,7 @@ module.exports = class Container {
         vimDiffToHtml: reportHelper.vimDiffToHtml.bind(reportHelper),
         fileManager,
         storage,
+        driver, // NEW
         config: this.config
       });
       return (ddl, name = null) => exporterService.export(ddl, name);
@@ -128,6 +141,30 @@ module.exports = class Container {
       const baseDir = container.get(BASE_DIR);
       const FileManager = require('../utils/file.helper');
       return FileManager.getInstance(baseDir);
+    });
+    return this;
+  }
+
+  createDriver() {
+    this.services.set(DRIVER, (container) => {
+      // For now, hardcode MySQL, but strictly we should use config.type
+      // const type = this.config.type || 'mysql';
+
+      const MySQLDriver = require('../drivers/mysql/MySQLDriver');
+
+      // Driver needs config, but config depends on Environment (DEV, PROD) which is passed at runtime...
+      // Wait, the Driver in `driver.interface.js` takes config in constructor.
+      // But Exporter `export(env)` function gets `env` at runtime.
+
+      // So Container should return a "DriverFactory" or the Driver should be stateless/connect on demand with config?
+      // In logical decoupling, the Service calls `driver.connect(config)`.
+
+      // Let's modify the Driver Interface to allow creating instances or connecting with config.
+      // Actually, my MySQLDriver implementation takes config in Constructor.
+
+      // So here we should return a factory function: (config) => new MySQLDriver(config)
+
+      return (config) => new MySQLDriver(config);
     });
     return this;
   }
