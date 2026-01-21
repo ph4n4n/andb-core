@@ -66,27 +66,29 @@ module.exports = class ExporterService {
   async exportTriggers(driver, dbConfig, specificName = null) {
     const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
     const ddlFolderPath = this.makeDDLFolderReady(dbPath, TRIGGERS, specificName);
-    const triggerQuery = specificName ? `SHOW TRIGGERS LIKE '${specificName}'` : "SHOW TRIGGERS";
+    const introspection = driver.getIntrospectionService();
 
     try {
-      const triggerResults = await driver.query(triggerQuery);
+      // 1. Get list of names
+      const triggerNames = await introspection.listTriggers(dbConfig.database, specificName);
 
       if (!specificName) {
         await this.appendReport(dbConfig.envName, {
-          triggers_total: triggerResults.length,
+          triggers_total: triggerNames.length,
         });
       }
 
       const exportedData = [];
 
-      for (const row of triggerResults) {
-        const triggerName = row.Trigger;
-        const query = `SHOW CREATE TRIGGER \`${triggerName}\``;
+      // 2. Iterate and get DDL
+      for (const triggerName of triggerNames) {
         try {
-          const result = await driver.query(query);
-          const createStatement = result[0]["SQL Original Statement"];
+          const formattedStatement = await introspection.getTriggerDDL(dbConfig.database, triggerName);
 
-          const formattedStatement = driver.getDDLParser().normalize(createStatement);
+          if (!formattedStatement) {
+            if (global.logger) global.logger.warn(`Skipping trigger ${triggerName}: No DDL found`);
+            continue;
+          }
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, TRIGGERS, triggerName, formattedStatement);
 
@@ -110,7 +112,7 @@ module.exports = class ExporterService {
       }
 
       return {
-        count: triggerResults.length,
+        count: triggerNames.length,
         data: exportedData
       };
     } catch (err) {
@@ -130,37 +132,29 @@ module.exports = class ExporterService {
     const self = this;
     const dbPath = `db/${dbConfig.envName}/${self.getDBName(dbConfig.envName)}`;
     const ddlFolderPath = self.makeDDLFolderReady(dbPath, FUNCTIONS, specificName);
-
-    const functionQuery = specificName
-      ? `SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?) AND Name = ?`
-      : "SHOW FUNCTION STATUS WHERE LOWER(Db) = LOWER(?)";
-    const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+    const introspection = driver.getIntrospectionService();
 
     try {
-      const functionResults = await driver.query(functionQuery, queryParams);
+      // 1. Get list
+      const functionNames = await introspection.listFunctions(dbConfig.database, specificName);
 
       if (!specificName) {
         await self.appendReport(dbConfig.envName, {
-          functions_total: functionResults.length,
+          functions_total: functionNames.length,
         });
       }
 
       const exportedData = [];
 
-      for (const row of functionResults) {
-        const fnName = row.Name || row.name || Object.values(row)[1];
-        const query = `SHOW CREATE FUNCTION \`${fnName}\``;
-
+      // 2. Iterate and get DDL
+      for (const fnName of functionNames) {
         try {
-          const result = await driver.query(query);
-          const createStatement = result[0]["Create Function"];
+          const cleanStatement = await introspection.getFunctionDDL(dbConfig.database, fnName);
 
-          if (!createStatement) {
-            if (global.logger) global.logger.warn(`Skipping function ${fnName}: No CREATE FUNCTION statement found`);
+          if (!cleanStatement) {
+            if (global.logger) global.logger.warn(`Skipping function ${fnName}: No DDL found`);
             continue;
           }
-
-          const cleanStatement = driver.getDDLParser().normalize(createStatement);
 
           self.appendDDL(dbConfig.envName, ddlFolderPath, FUNCTIONS, fnName, cleanStatement);
 
@@ -184,7 +178,7 @@ module.exports = class ExporterService {
       }
 
       return {
-        count: functionResults.length,
+        count: functionNames.length,
         data: exportedData
       };
     } catch (err) {
@@ -202,37 +196,27 @@ module.exports = class ExporterService {
   async exportProcedures(driver, dbConfig, specificName = null) {
     const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
     const ddlFolderPath = this.makeDDLFolderReady(dbPath, PROCEDURES, specificName);
-
-    const procedureQuery = specificName
-      ? `SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?) AND Name = ?`
-      : "SHOW PROCEDURE STATUS WHERE LOWER(Db) = LOWER(?)";
-    const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+    const introspection = driver.getIntrospectionService();
 
     try {
-      const procedureResults = await driver.query(procedureQuery, queryParams);
+      const procedureNames = await introspection.listProcedures(dbConfig.database, specificName);
 
       if (!specificName) {
         await this.appendReport(dbConfig.envName, {
-          procedures_total: procedureResults.length,
+          procedures_total: procedureNames.length,
         });
       }
 
       const exportedData = [];
 
-      for (const row of procedureResults) {
-        const spName = row.Name || row.name || Object.values(row)[1];
-        const query = `SHOW CREATE PROCEDURE \`${spName}\``;
-
+      for (const spName of procedureNames) {
         try {
-          const result = await driver.query(query);
-          const createStatement = result[0]["Create Procedure"];
+          const cleanStatement = await introspection.getProcedureDDL(dbConfig.database, spName);
 
-          if (!createStatement) {
-            if (global.logger) global.logger.warn(`Skipping procedure ${spName}: No CREATE PROCEDURE statement found`);
+          if (!cleanStatement) {
+            if (global.logger) global.logger.warn(`Skipping procedure ${spName}: No DDL found`);
             continue;
           }
-
-          const cleanStatement = driver.getDDLParser().normalize(createStatement);
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, PROCEDURES, spName, cleanStatement);
 
@@ -256,7 +240,7 @@ module.exports = class ExporterService {
       }
 
       return {
-        count: procedureResults.length,
+        count: procedureNames.length,
         data: exportedData
       };
     } catch (err) {
@@ -272,27 +256,26 @@ module.exports = class ExporterService {
   async exportViews(driver, dbConfig, specificName = null) {
     const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
     const ddlFolderPath = this.makeDDLFolderReady(dbPath, 'views', specificName);
-    const viewQuery = specificName
-      ? `SHOW FULL TABLES WHERE Table_type = 'VIEW' AND \`Tables_in_${dbConfig.database}\` = ?`
-      : "SHOW FULL TABLES WHERE Table_type = 'VIEW'";
-    const queryParams = specificName ? [specificName] : [];
+    const introspection = driver.getIntrospectionService();
 
     try {
-      const viewResults = await driver.query(viewQuery, queryParams);
+      // 1. List
+      const viewNames = await introspection.listViews(dbConfig.database, specificName);
 
       if (!specificName) {
-        await this.appendReport(dbConfig.envName, { views_total: viewResults.length });
+        await this.appendReport(dbConfig.envName, { views_total: viewNames.length });
       }
       const exportedData = [];
 
-      for (const row of viewResults) {
-        const viewName = Object.values(row)[0];
-        const query = `SHOW CREATE VIEW \`${viewName}\``;
-
+      // 2. Iterate
+      for (const viewName of viewNames) {
         try {
-          const result = await driver.query(query);
-          const createStatement = result[0]["Create View"];
-          const cleanStatement = driver.getDDLParser().normalize(createStatement);
+          const cleanStatement = await introspection.getViewDDL(dbConfig.database, viewName);
+
+          if (!cleanStatement) {
+            if (global.logger) global.logger.warn(`Skipping view ${viewName}: No DDL found`);
+            continue;
+          }
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, 'views', viewName, cleanStatement);
           exportedData.push({ name: viewName, ddl: cleanStatement });
@@ -305,7 +288,7 @@ module.exports = class ExporterService {
         await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), 'views', exportedData, !specificName);
       }
 
-      return { count: viewResults.length, data: exportedData };
+      return { count: viewNames.length, data: exportedData };
     } catch (error) {
       if (global.logger) global.logger.error("Error in exportViews:", error);
       throw error;
@@ -315,46 +298,30 @@ module.exports = class ExporterService {
   async exportTables(driver, dbConfig, specificName = null) {
     const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
     const ddlFolderPath = this.makeDDLFolderReady(dbPath, TABLES, specificName);
-    const tableQuery = specificName
-      ? `SHOW TABLES LIKE ?`
-      : "SHOW TABLES";
-    const queryParams = specificName ? [specificName] : [];
+    const introspection = driver.getIntrospectionService();
 
     try {
-      const tableResults = await driver.query(tableQuery, queryParams);
+      // 1. List
+      const tableNames = await introspection.listTables(dbConfig.database, specificName);
 
       if (!specificName) {
         await this.appendReport(dbConfig.envName, {
-          tables_total: tableResults.length,
+          tables_total: tableNames.length,
         });
       }
 
       const exportedData = [];
 
-      for (const row of tableResults) {
-        const tableName = Object.values(row)[0];
-        const query = `SHOW CREATE TABLE \`${tableName}\``;
-
+      // 2. Iterate
+      for (const tableName of tableNames) {
         try {
-          const result = await driver.query(query);
+          const cleanStatement = await introspection.getTableDDL(dbConfig.database, tableName);
 
-          if (!result || !result[0]) {
-            if (global.logger) global.logger.error(`Empty result for table: ${tableName}`);
+          if (!cleanStatement) {
+            // getTableDDL returns null if it's a View or missing
             continue;
           }
 
-          const createStatement = result[0]["Create Table"];
-
-          if (!createStatement) {
-            if (global.logger && result[0]['Create View']) {
-              global.logger.warn(`Skipping VIEW: ${tableName} (use export views command for views)`);
-            } else if (global.logger) {
-              global.logger.error(`No "Create Table" in result for: ${tableName}`);
-            }
-            continue;
-          }
-
-          const cleanStatement = driver.getDDLParser().normalize(createStatement);
           this.appendDDL(dbConfig.envName, ddlFolderPath, TABLES, tableName, cleanStatement);
 
           exportedData.push({
@@ -370,7 +337,7 @@ module.exports = class ExporterService {
         await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), TABLES, exportedData, !specificName);
       }
 
-      return { count: tableResults.length, data: exportedData };
+      return { count: tableNames.length, data: exportedData };
     } catch (error) {
       if (global.logger) global.logger.error("Error in exportTables:", error);
       throw error;
@@ -380,27 +347,26 @@ module.exports = class ExporterService {
   async exportEvents(driver, dbConfig, specificName = null) {
     const dbPath = `db/${dbConfig.envName}/${this.getDBName(dbConfig.envName)}`;
     const ddlFolderPath = this.makeDDLFolderReady(dbPath, EVENTS, specificName);
-    const eventQuery = specificName
-      ? `SHOW EVENTS WHERE Db = ? AND Name = ?`
-      : `SHOW EVENTS WHERE Db = ?`;
-    const queryParams = specificName ? [dbConfig.database, specificName] : [dbConfig.database];
+    const introspection = driver.getIntrospectionService();
 
     try {
-      const eventResults = await driver.query(eventQuery, queryParams);
+      // 1. List
+      const eventNames = await introspection.listEvents(dbConfig.database, specificName);
 
       if (!specificName) {
-        await this.appendReport(dbConfig.envName, { events_total: eventResults.length });
+        await this.appendReport(dbConfig.envName, { events_total: eventNames.length });
       }
       const exportedData = [];
 
-      for (const row of eventResults) {
-        const eventName = row.Name;
-        const query = `SHOW CREATE EVENT \`${eventName}\``;
-
+      // 2. Iterate
+      for (const eventName of eventNames) {
         try {
-          const result = await driver.query(query);
-          const createStatement = result[0]["Create Event"];
-          let cleanStatement = driver.getDDLParser().normalize(createStatement);
+          const cleanStatement = await introspection.getEventDDL(dbConfig.database, eventName);
+
+          if (!cleanStatement) {
+            if (global.logger) global.logger.warn(`Skipping event ${eventName}: No DDL found`);
+            continue;
+          }
 
           this.appendDDL(dbConfig.envName, ddlFolderPath, EVENTS, eventName, cleanStatement);
           exportedData.push({ name: eventName, ddl: cleanStatement });
@@ -413,7 +379,7 @@ module.exports = class ExporterService {
         await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), EVENTS, exportedData, !specificName);
       }
 
-      return { count: eventResults.length, data: exportedData };
+      return { count: eventNames.length, data: exportedData };
     } catch (error) {
       if (global.logger) global.logger.error("Error in exportEvents:", error);
       throw error;
