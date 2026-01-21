@@ -1,122 +1,90 @@
-# andb-core
+# The Andb Core 🚀
 
-Database migration and comparison tool by ph4n4n
+**The Premium Database Orchestration Engine** — Intelligent Schema Management, Seamless Synchronization, and High-Fidelity Reporting.
 
-## Quick Start
+---
 
-```bash
-# Install
-npm install andb-core
+## 🌟 Overview
 
-# Basic usage
-andb export -t tables
-andb compare -f functions
-andb migrate:new -p procedures
-```
+**The Andb Core** is the heart of the Andb Orchestrator ecosystem. It provides a robust, driver-agnostic engine to manage database schemas across multiple environments (DEV, STAGE, PROD) with absolute precision.
 
-## 🚀 Features
+Built for modern DevOps workflows, it transforms database synchronization from a manual chore into an automated, predictable, and visually insightful process.
 
-- ✅ **Database Export** - Tables, Procedures, Functions, Triggers
-- ✅ **Environment Comparison** - Compare between DEV/STAGE/PROD
-- ✅ **Migration Tools** - New/Update/Remove objects
-- ✅ **Script Generator** - Auto-generate npm scripts
-- ✅ **Multi-Environment** - Support DEV/PROD workflows (extensible)
+## ✨ Features
 
-## 📚 Documentation
+- 💎 **Premium Intelligence**: Advanced comparison engine for Tables, Views, Procedures, Functions, Triggers, and Events.
+- 📊 **High-Fidelity Reporting**: Industry-leading HTML reports with dark-mode aesthetics and dynamic data visualization.
+- 🏗️ **"Zero to Hero" Architecture**: Clean dependency injection and pluggable storage strategies (Git-friendly or UI-optimized).
+- 🛡️ **Session Hygiene**: Automatic handling of foreign key checks and session modes for safe migrations.
+- 🔌 **Extensible**: Designed to support MySQL/MariaDB out of the box, with a clear roadmap for PostgreSQL.
 
-### 🇺🇸 English
+## 🚀 Quick Start
 
-- 📖 [CLI Usage](docs/CLI_EN.md) - Complete CLI commands
-- 📖 [Script Generator](docs/GENERATOR_EN.md) - Auto-generate npm scripts
-- 📖 [Integration Guide](docs/INTEGRATION_EN.md) - Programmatic usage
-- 📖 [Examples](examples/) - Ready-to-use examples, please check [QUICKSTART](examples/basic-with-env/QUICKSTART.md) guild
-
-### 🇻🇳 Tiếng Việt
-
-- 📖 [Hướng dẫn CLI](docs/CLI.md) - Lệnh CLI đầy đủ
-- 📖 [Script Generator](docs/GENERATOR.md) - Tự động sinh npm scripts
-- 📖 [Hướng dẫn tích hợp](docs/INTEGRATION.md) - Sử dụng programmatic
-- 📖 [Ví dụ](examples/) - Ví dụ sẵn sàng sử dụng, xem [QUICKSTART](examples/basic-with-env/QUICKSTART.md) để thấy rõ hơn
-
-## 🛠️ Script Generator
-
-Auto-generate npm scripts for your workflow:
+### Installation
 
 ```bash
-# Generate with default config
-npm run generate
-
-# Custom environments
-ANDB_ENVIRONMENTS="DEV,STAGE,PROD" npm run generate
-
-# Generated scripts
-npm run export:dev:fn      # Export functions from DEV
-npm run compare:prod:sp    # Compare procedures in PROD
-npm run migrate:stage:new  # Migrate new objects to STAGE
+npm install @the-andb/core
 ```
 
-📖 **Documentation**: [GENERATOR.md](docs/GENERATOR.md) | [GENERATOR_EN.md](docs/GENERATOR_EN.md)
+### Basic CLI Usage
+
+Initialize your project and generate a clean workflow:
+
+```bash
+npx andb init
+npx andb generate
+```
+
+### Programmatic Integration
+
+```javascript
+const { Container } = require("@the-andb/core");
+
+const container = new Container(config);
+const { exporter, comparator } = container.getServices();
+
+await exporter("TABLES")("users");
+```
+
+## 📊 High-Fidelity Reports
+
+The Andb Core generates premium reports that provide deep insights into your schema evolution.
+
+> **Tip**: Check out our interactive demo!
+>
+> ```bash
+> node test/reports/report.demo.js
+> ```
 
 ## 📁 Project Structure
 
-```
-andb-core/
-├── core/           # Core functionality
-├── examples/       # Integration examples
-├── docs/          # Documentation
-├── scripts/       # CLI scripts
-└── test/          # Test files
-```
-
-## 🔧 Environment Setup
-
-```bash
-# .env
-DEV_DB_HOST=localhost
-DEV_DB_NAME=dev_database
-DEV_DB_USER=root
-DEV_DB_PASS=password
-
-PROD_DB_HOST=prod-server.com
-PROD_DB_NAME=prod_database
-PROD_DB_USER=prod_user
-PROD_DB_PASS=prod_password
-
-# 💡 Extend with more environments
-# STAGE_DB_HOST=stage-server.com
-# STAGE_DB_NAME=stage_database
-# STAGE_DB_USER=stage_user
-# STAGE_DB_PASS=stage_password
+```text
+the-andb-core/
+├── src/           # Core engine logic
+│   ├── service/   # Business services (Migrator, Comparator, etc.)
+│   ├── drivers/   # Database-specific drivers
+│   ├── utils/     # Highly efficient utility modules
+│   └── reports/   # Premium HTML templates
+├── docs/          # Comprehensive documentation
+├── test/          # Full test suite & high-fidelity demos
+└── index.js       # Entry point
 ```
 
-## 📊 Output Structure
+## 📜 Documentation
 
-```
-📦 <environment>
-├── 📂 <schema>
-│   ├── 📂 current-ddl
-        ├── functions.list
-        ├── procedures.list
-        ├── tables.list
-        └── triggers.list
-│   ├── ⚙️ functions
-│   ├── 🔧 procedures
-│   ├── 📊 tables
-│   └── 🔄 triggers
-└── 📂 backup/
-    └── 📅 <date>/
-```
+- 📖 [CLI Usage Guide](docs/CLI_EN.md)
+- 📖 [Integration Manual](docs/INTEGRATION_EN.md)
+- 📖 [Script Generator](docs/GENERATOR_EN.md)
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Create Pull Request
+We welcome contributions from the community! Please read our [Contribution Guidelines](CONTRIBUTING.md) to get started.
 
 ## 📄 License
 
-AGPLv3 License - see [LICENSE](LICENSE) file
+This project is licensed under the **MIT License** — providing maximum flexibility for both personal and commercial use.
 
-ph4n4n
+---
+
+**Keep Going. Keep Syncing.**  
+Made with ❤️ by [The Andb Team](https://github.com/The-Andb)
