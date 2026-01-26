@@ -129,7 +129,8 @@ class DumpDriver extends IDatabaseDriver {
       // Handle DELIMITER command (case-insensitive)
       const delimiterMatch = trimmed.match(/^DELIMITER\s+(.+)$/i);
       if (delimiterMatch) {
-        currentDelimiter = delimiterMatch[1].trim().replace(/;$/, '');
+        // Keep the delimiter exactly as specified (e.g., ;; or // or $$)
+        currentDelimiter = delimiterMatch[1].trim();
         continue;
       }
 
@@ -166,8 +167,9 @@ class DumpDriver extends IDatabaseDriver {
     // Normalize whitespace for type detection
     const normalized = stmt.replace(/\s+/g, ' ');
 
-    // Improved regex to handle DEFINER, ALGORITHM, SQL SECURITY, etc.
-    const createMatch = normalized.match(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:DEFINER\s*=\s*\S+\s+)?(?:ALGORITHM\s*=\s*\S+\s+)?(?:SQL\s+SECURITY\s+\S+\s+)?(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|EVENT)\s+/i);
+    // Improved regex to handle DEFINER, ALGORITHM, SQL SECURITY in any order
+    // These clauses can appear in various orders depending on MySQL version and dump tool
+    const createMatch = normalized.match(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:DEFINER\s*=\s*\S+|ALGORITHM\s*=\s*\S+|SQL\s+SECURITY\s+\S+)\s+)*(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|EVENT)\s+/i);
 
     if (!createMatch) {
       if (global.logger) global.logger.warn(`[DumpDriver] Statement skipped (no CREATE match): ${normalized.substring(0, 50)}...`);
