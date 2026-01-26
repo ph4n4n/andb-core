@@ -67,7 +67,41 @@ class ReportHelper {
     } = require('../configs/constants');
 
     // 1. read template
-    const template = this.fileManager.readFromFile('src/reports/html', 'template.html');
+    // 1. read template
+    let templatePath = path.join(__dirname, '../reports/html/template.html');
+
+    // Check multiple locations for template
+    const possiblePaths = [
+      templatePath,
+      path.join(__dirname, 'template.html'),
+      path.join(process.cwd(), 'template.html'),
+      path.join(this.reportDir, 'template.html'),
+      // Hardcoded dev path fallback
+      path.resolve('/Volumes/FlexibleWorkplace/The-Andb/core/src/reports/html/template.html')
+    ];
+
+    let foundPath = null;
+    let template = '';
+
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        foundPath = p;
+        break;
+      }
+    }
+
+    if (foundPath) {
+      console.log(`[CORE] Reading report template from: ${foundPath}`);
+      try {
+        template = fs.readFileSync(foundPath, 'utf8');
+        console.log(`[CORE] Template CSP present: ${!!template.match(/Content-Security-Policy/)}`);
+      } catch (e) {
+        console.error('[CORE] Error reading template:', e);
+      }
+    } else {
+      console.error('[CORE] Template file not found in any location:', possiblePaths);
+      template = '<html><body><h1>Template missing</h1><p>Please check console logs.</p></body></html>';
+    }
     // 2. read report
     const report = this.fileManager.readFromFile(`${this.reportDir}/json`, `${this.getDBName(destEnv)}.${destEnv}.json`);
     const rr = revertAndJoin(report);
@@ -109,13 +143,17 @@ class ReportHelper {
     };
 
     // Auto-generate DDL list replacements
+    // Auto-generate DDL list replacements
     [TABLES, VIEWS, PROCEDURES, FUNCTIONS, TRIGGERS, EVENTS].forEach(type => {
-      const typeLower = type.toLowerCase().replace(/s$/, ''); // singular for folder if needed, but constants use plural
+      // type is lowercase e.g. 'tables'
       const typePath = `${folderMap}/${type}`;
 
-      replacements[`{{${type.replace(/S$/, '')}_NEW}}`] = this.genDDLItem(typePath, NEW);
-      replacements[`{{${type.replace(/S$/, '')}_UPDATE}}`] = this.genDDLItem(typePath, UPDATED, type, destEnv);
-      replacements[`{{${type.replace(/S$/, '')}_DEPRECATED}}`] = this.genDDLItem(typePath, DEPRECATED);
+      // Convert 'tables' -> 'TABLE' (uppercase singular) to match template {{TABLE_NEW}}
+      const typeKey = type.toUpperCase().replace(/S$/, '');
+
+      replacements[`{{${typeKey}_NEW}}`] = this.genDDLItem(typePath, NEW);
+      replacements[`{{${typeKey}_UPDATE}}`] = this.genDDLItem(typePath, UPDATED, type, destEnv);
+      replacements[`{{${typeKey}_DEPRECATED}}`] = this.genDDLItem(typePath, DEPRECATED);
     });
 
     let reportHTML = template;
@@ -124,16 +162,29 @@ class ReportHelper {
       reportHTML = reportHTML.split(key).join(value);
     }
 
-    this.fileManager.saveToFile(this.reportDir, `${this.getDBName(destEnv)}.${destEnv}.html`, reportHTML);
+    const reportFileName = `${this.getDBName(destEnv)}.${destEnv}.html`;
+    console.log(`[CORE] Generating HTML report: ${reportFileName} in ${this.reportDir}`);
+
+    try {
+      this.fileManager.saveToFile(this.reportDir, reportFileName, reportHTML);
+      console.log(`[CORE] Successfully wrote HTML report: ${path.join(this.reportDir, reportFileName)}`);
+    } catch (e) {
+      console.error(`[CORE] Failed to write HTML report:`, e);
+    }
   }
 
   genDDLItem(ddlPath, status, ddlType, destEnv = null) {
-    const ddlList = this.fileManager.readFromFile(ddlPath, `${status}.list`)?.split('\n') || [];
+    const rawContent = this.fileManager.readFromFile(ddlPath, `${status}.list`);
+    const ddlList = typeof rawContent === 'string' && rawContent.length > 0
+      ? rawContent.split('\n').filter(Boolean)
+      : [];
+
     if (!ddlList.length) {
-      return `<li>None</li>`;
+      return `<li class="empty-state">No changes detected</li>`;
     }
     if (destEnv) {
-      return ddlList.map((ddl) => (`<li><a href="/reports/diff/${destEnv}/${this.getDBName(destEnv)}/${ddlType}/${ddl}.html">${ddl}</a></li>`)).join('\n');
+      // TODO: Implement proper diff linking in the future, current just alerts or void
+      return ddlList.map((ddl) => (`<li><a href="#" style="pointer-events: none; cursor: default;">${ddl}</a></li>`)).join('\n');
     }
     return ddlList.map((ddl) => (`<li>${ddl}</li>`)).join('\n');
   }

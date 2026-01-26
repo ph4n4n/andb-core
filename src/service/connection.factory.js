@@ -9,7 +9,10 @@ class ConnectionFactory {
    * @param {Object} drivers - Map of available driver classes
    */
   constructor(drivers = {}) {
-    this.drivers = drivers;
+    this.drivers = {
+      ...drivers,
+      'dump': require('../drivers/mysql/DumpDriver')
+    };
     this.activeTunnels = new Map();
   }
 

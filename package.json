@@ -1,6 +1,6 @@
 {
   "name": "@the-andb/core",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "publishConfig": {
     "access": "public"
   },
@@ -26,7 +26,8 @@
     "commander": "^11.1.0",
     "diff": "^5.1.0",
     "js-yaml": "^4.1.1",
-    "mysql2": "^3.14.3"
+    "mysql2": "^3.14.3",
+    "ssh2": "^1.15.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

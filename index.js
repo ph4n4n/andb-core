@@ -21,6 +21,9 @@ const MigratorService = require('./src/service/migrator');
 const MonitorService = require('./src/service/monitor');
 const Container = require('./src/service/container');
 
+// Storage Strategies
+const { SQLiteStorage, FileStorage, HybridStorage } = require('./src/utils/storage.strategy');
+
 // CLI Builder
 const { build: buildCLI } = require('./src/cli');
 
@@ -33,5 +36,9 @@ module.exports = {
   MigratorService,
   MonitorService,
   Container,
-  buildCLI
+  buildCLI,
+  // Storage
+  SQLiteStorage,
+  FileStorage,
+  HybridStorage
 };

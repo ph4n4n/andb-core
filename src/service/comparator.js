@@ -314,8 +314,8 @@ module.exports = class ComparatorService {
   }
 
   async findDDLChanged2Migrate(srcEnv, ddlType, destEnv) {
-    const { parser, driver } = await this.getDriverSubServices(destEnv);
     return async name => {
+      const { parser, driver } = await this.getDriverSubServices(destEnv);
       try {
         const [srcContent, destContent] = await Promise.all([
           this._getDDLContent(srcEnv, ddlType, name),

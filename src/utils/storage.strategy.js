@@ -416,11 +416,24 @@ class SQLiteStorage extends StorageStrategy {
   }
 
   async clearAll() {
-    this.repositories.ddl.deleteAll();
-    this.repositories.comparison.deleteAll();
-    this.repositories.snapshot.deleteAll();
-    this.repositories.migration.deleteAll();
-    this.db.prepare('DELETE FROM storage_actions').run();
+    const ddl = await this.repositories.ddl.deleteAll();
+    const comparison = await this.repositories.comparison.deleteAll();
+    const snapshot = await this.repositories.snapshot.deleteAll();
+    const migration = await this.repositories.migration.deleteAll();
+
+    // Check if table exists before deleting (storage_actions might not be initialized in all versions)
+    let actions = { changes: 0 };
+    try {
+      actions = this.db.prepare('DELETE FROM storage_actions').run();
+    } catch (e) { /* ignore */ }
+
+    return {
+      ddl: ddl.changes,
+      comparison: comparison.changes,
+      snapshot: snapshot.changes,
+      migration: migration.changes,
+      actions: actions.changes
+    };
   }
 
   async getStats() {

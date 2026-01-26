@@ -134,15 +134,21 @@ class DDLRepository extends BaseRepository {
 
   async clearConnectionData(environment, database) {
     const env = this.normalize(environment);
+    let ddlCount = 0;
+    let comparisonCount = 0;
+
     const runTransaction = this.transaction(() => {
-      this.prepare(`DELETE FROM ${T} WHERE ${C.ENVIRONMENT} = ? AND ${C.DATABASE_NAME} = ?`)
+      const ddlRes = this.prepare(`DELETE FROM ${T} WHERE ${C.ENVIRONMENT} = ? AND ${C.DATABASE_NAME} = ?`)
         .run(env, database);
-      this.prepare(`DELETE FROM ${TABLES.COMPARISONS} WHERE src_environment = ? AND database_name = ?`)
-        .run(env, database);
-      this.prepare(`DELETE FROM ${TABLES.COMPARISONS} WHERE dest_environment = ?`)
-        .run(env);
+      ddlCount = ddlRes.changes;
+
+      const compRes = this.prepare(`DELETE FROM ${TABLES.COMPARISONS} WHERE (src_environment = ? OR dest_environment = ?) AND database_name = ?`)
+        .run(env, env, database);
+      comparisonCount = compRes.changes;
     });
     runTransaction();
+
+    return { ddlCount, comparisonCount };
   }
 
   async count() {

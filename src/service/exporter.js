@@ -181,17 +181,8 @@ module.exports = class ExporterService {
         global.logger.warn(`Start exporting ${ddl} changes for...`, env);
       }
 
-      const driverConfig = {
-        host: dbConfig.host,
-        database: dbConfig.database,
-        user: dbConfig.user,
-        password: dbConfig.password,
-        port: dbConfig.port,
-        ssh: dbConfig.ssh || { enabled: false } // Pass SSH config if available
-      };
-
       // Create and Connect Driver (Unified Factory)
-      const driver = await this.driver(driverConfig);
+      const driver = await this.driver(dbConfig);
 
       try {
         let result;

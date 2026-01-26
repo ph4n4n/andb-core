@@ -2,23 +2,33 @@ const IDDLParser = require('../../interfaces/parser.interface');
 
 class MySQLParser extends IDDLParser {
 
+  /**
+   * Normalize for comparison (flattens)
+   */
   normalize(ddl) {
+    if (!ddl) return '';
+    let processed = this.clean(ddl);
+    // Collapse whitespace for comparison purposes
+    return processed.replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Clean DDL artifacts but PRESERVE formatting/newlines
+   */
+  clean(ddl) {
     if (!ddl) return '';
     let processed = ddl;
 
-    // 1. Uppercase Keywords (MySQL specific list)
+    // 1. Uppercase Keywords
     processed = this.uppercaseMySQLKeywords(processed);
 
-    // 2. Clean Definer (MySQL specific regex)
+    // 2. Clean Definer
     processed = this.cleanDefiner(processed);
 
     // 3. Clean Auto Increment
     processed = processed.replace(/AUTO_INCREMENT=\d+\s*/gi, "");
 
-    // 4. Collapse whitespace
-    processed = processed.replace(/\s+/g, ' ').trim();
-
-    return processed;
+    return processed.trim();
   }
 
   cleanDefiner(ddl) {
@@ -31,7 +41,7 @@ class MySQLParser extends IDDLParser {
 
     // Simple global replace
     const re = new RegExp(definerPattern, 'gi');
-    return ddl.replace(re, '').replace(/\s{2,}/g, ' ');
+    return ddl.replace(re, '');
   }
 
   uppercaseMySQLKeywords(query) {
