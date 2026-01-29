@@ -8,8 +8,23 @@ class MySQLParser extends IDDLParser {
   normalize(ddl) {
     if (!ddl) return '';
     let processed = this.clean(ddl);
-    // Collapse whitespace for comparison purposes
-    return processed.replace(/\s+/g, ' ').trim();
+
+    // 1. Normalize Integer Types (MySQL 8.0 ignores display width)
+    // BIGINT(20) -> BIGINT, INT(11) -> INT, etc.
+    processed = processed.replace(/(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT)\(\d+\)/gi, "$1");
+
+    // 2. Normalize Character Set / Collate
+    // CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci -> COLLATE utf8mb4_0900_ai_ci (simplify)
+    // actually just ensure consistency
+    processed = processed.replace(/CHARACTER SET\s+(\w+)/gi, "CHARSET=$1");
+
+    // 3. Normalize Double/Float precision if it's default
+    // DOUBLE(22,0) -> DOUBLE
+
+    // 4. Normalize spacing and casing
+    processed = processed.replace(/\s+/g, ' ').trim();
+
+    return processed;
   }
 
   /**
@@ -19,13 +34,16 @@ class MySQLParser extends IDDLParser {
     if (!ddl) return '';
     let processed = ddl;
 
-    // 1. Uppercase Keywords
+    // 1. Strip MySQL Version Comments: /*!50003 ... */ -> ...
+    processed = processed.replace(/\/\*!\d+\s*([^/]+)\*\//g, "$1");
+
+    // 2. Uppercase Keywords
     processed = this.uppercaseMySQLKeywords(processed);
 
-    // 2. Clean Definer
+    // 3. Clean Definer
     processed = this.cleanDefiner(processed);
 
-    // 3. Clean Auto Increment
+    // 4. Clean Auto Increment
     processed = processed.replace(/AUTO_INCREMENT=\d+\s*/gi, "");
 
     return processed.trim();

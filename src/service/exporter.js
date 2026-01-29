@@ -84,6 +84,9 @@ module.exports = class ExporterService {
       }
 
       if (this.storage) {
+        if (global.logger) {
+          global.logger.info(`[ExporterService] Saving export for env: ${dbConfig.envName}, db: ${this.getDBName(dbConfig.envName)}, objects: ${exportedData.length}`);
+        }
         await this.storage.saveExport(dbConfig.envName, this.getDBName(dbConfig.envName), type, exportedData, !specificName);
       }
 

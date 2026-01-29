@@ -32,52 +32,65 @@ describe('DumpDriver Parser', () => {
   });
 
   describe('_extractName()', () => {
+    // _extractName is designed to clean up a raw name captured from regex,
+    // NOT to parse full SQL statements. It removes quotes and extracts
+    // the final name from qualified names like `db`.`table`.
     const testCases = [
       {
-        name: 'simple table name',
-        stmt: 'CREATE TABLE users (id INT)',
+        name: 'simple unquoted name',
+        rawName: 'users',
         expected: 'users',
       },
       {
         name: 'backtick quoted name',
-        stmt: 'CREATE TABLE `user-profile` (id INT)',
+        rawName: '`user-profile`',
         expected: 'user-profile',
       },
       {
         name: 'qualified name (db.table)',
-        stmt: 'CREATE TABLE `mydb`.`users` (id INT)',
+        rawName: '`mydb`.`users`',
         expected: 'users',
       },
       {
-        name: 'IF NOT EXISTS',
-        stmt: 'CREATE TABLE IF NOT EXISTS `orders` (id INT)',
+        name: 'simple backtick quoted',
+        rawName: '`orders`',
         expected: 'orders',
       },
       {
-        name: 'procedure with DEFINER',
-        stmt: 'CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_user`()',
+        name: 'procedure name with backticks',
+        rawName: '`sp_get_user`',
         expected: 'sp_get_user',
       },
       {
-        name: 'view with OR REPLACE',
-        stmt: 'CREATE OR REPLACE VIEW `v_active_users` AS SELECT * FROM users',
+        name: 'view name with backticks',
+        rawName: '`v_active_users`',
         expected: 'v_active_users',
       },
       {
-        name: 'function with complex DEFINER',
-        stmt: 'CREATE DEFINER=`admin`@`%.example.com` FUNCTION `fn_calc`() RETURNS INT',
+        name: 'function name with backticks',
+        rawName: '`fn_calc`',
         expected: 'fn_calc',
       },
       {
-        name: 'trigger name',
-        stmt: 'CREATE TRIGGER `tr_before_insert` BEFORE INSERT ON users',
+        name: 'trigger name with backticks',
+        rawName: '`tr_before_insert`',
         expected: 'tr_before_insert',
+      },
+      {
+        name: 'double-quoted name',
+        rawName: '"my_table"',
+        expected: 'my_table',
+      },
+      {
+        name: 'null input',
+        rawName: null,
+        expected: null,
       },
     ];
 
-    testCases.forEach(({ name, stmt, expected }) => {
+    testCases.forEach(({ name, rawName, expected }) => {
       test(name, () => {
-        const result = driver._extractName(stmt);
+        const result = driver._extractName(rawName);
         expect(result).toBe(expected);
       });
     });

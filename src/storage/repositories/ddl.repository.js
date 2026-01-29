@@ -58,6 +58,16 @@ class DDLRepository extends BaseRepository {
     `);
 
     const results = stmt.all(env, database, ddlType);
+    if (results.length === 0) {
+      // Fallback: Try case-insensitive lookup for database if normal lookup fails
+      const stmtCaseInsensitive = this.prepare(`
+        SELECT ${C.DDL_NAME} FROM ${T}
+        WHERE ${C.ENVIRONMENT} = ? AND ${C.DATABASE_NAME} COLLATE NOCASE = ? AND ${C.DDL_TYPE} = ?
+        ORDER BY ${C.DDL_NAME}
+      `);
+      const fallbackResults = stmtCaseInsensitive.all(env, database, ddlType);
+      return fallbackResults.map(r => r.ddl_name);
+    }
     return results.map(r => r.ddl_name);
   }
 
@@ -69,7 +79,17 @@ class DDLRepository extends BaseRepository {
       WHERE ${C.ENVIRONMENT} = ? AND ${C.DATABASE_NAME} = ? AND ${C.DDL_TYPE} = ?
       ORDER BY ${C.DDL_NAME}
     `);
-    const results = stmt.all(env, database, ddlType);
+    let results = stmt.all(env, database, ddlType);
+
+    if (results.length === 0) {
+      // Fallback: Try case-insensitive lookup for database if normal lookup fails
+      const stmtCaseInsensitive = this.prepare(`
+        SELECT * FROM ${T} 
+        WHERE ${C.ENVIRONMENT} = ? AND ${C.DATABASE_NAME} COLLATE NOCASE = ? AND ${C.DDL_TYPE} = ?
+        ORDER BY ${C.DDL_NAME}
+       `);
+      results = stmtCaseInsensitive.all(env, database, ddlType);
+    }
     return results.map(r => DDLEntity.fromRow(r));
   }
 
@@ -118,7 +138,17 @@ class DDLRepository extends BaseRepository {
       WHERE ${C.ENVIRONMENT} = ?
       ORDER BY ${C.DATABASE_NAME}
     `);
-    return stmt.all(env).map(r => r.database_name);
+    // If no results standard, try case insensitive for environment grouping
+    let results = stmt.all(env).map(r => r.database_name);
+    if (!results.length) {
+      const stmtCI = this.prepare(`
+        SELECT DISTINCT ${C.DATABASE_NAME} FROM ${T}
+        WHERE ${C.ENVIRONMENT} COLLATE NOCASE = ?
+        ORDER BY ${C.DATABASE_NAME}
+       `);
+      results = stmtCI.all(env).map(r => r.database_name);
+    }
+    return results;
   }
 
   async getLastUpdated(environment, database) {

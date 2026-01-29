@@ -108,55 +108,57 @@ class DumpDriver extends IDatabaseDriver {
    * Stateful dump parser to extract DDLs correctly (handles DELIMITER)
    */
   _parseDump(content) {
-    // 1. Strip multi-line comments first to simplify line-by-line parsing
-    // but keep /*! version specific */ comments as they might contain DDL
-    const cleanContent = content.replace(/\/\*(?!![\d\s])[\s\S]*?\*\//g, '');
-    const lines = cleanContent.split(/\r?\n/);
+    if (!content) return;
 
-    let currentDelimiter = ';';
+    // Remove comments but keep pragmas (strip wrapper)
+    const cleaned = content.replace(/(\/\*([\s\S]*?)\*\/)|(--.*)|(#.*)/g, (match) => {
+      // Handle Executable Comments: /*!50003 CREATE ... */ -> CREATE ...
+      if (match.startsWith('/*!')) {
+        // Remove /*!12345 and */
+        return match.replace(/^\/\*!\d*\s*/, '').replace(/\s*\*\/$/, ' ');
+      }
+      return '';
+    });
+
+    const lines = cleaned.split('\n');
     let buffer = [];
     let inBeginEndBlock = 0;
+    let currentDelimiter = ';';
 
     for (let line of lines) {
-      // Strip trailing single-line comments for easier delimiter detection
-      // Note: This is a simple strip, may fail if strings contain these chars
-      let cleanLine = line.split('--')[0].split('#')[0];
-      const trimmed = cleanLine.trim();
-
-      // Skip empty lines or pure single-line comments
+      let trimmed = line.trim();
       if (!trimmed) continue;
 
-      // Handle DELIMITER command (case-insensitive)
-      const delimiterMatch = trimmed.match(/^DELIMITER\s+(.+)$/i);
-      if (delimiterMatch) {
-        // Keep the delimiter exactly as specified (e.g., ;; or // or $$)
-        currentDelimiter = delimiterMatch[1].trim();
+      // DELIMITER change
+      if (trimmed.toUpperCase().startsWith('DELIMITER')) {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length > 1) {
+          currentDelimiter = parts[1];
+        }
         continue;
       }
 
-      // Track BEGIN...END for procedures/functions without DELIMITER
-      const upperClean = trimmed.toUpperCase().replace(/;$/, '');
-      if (upperClean === 'BEGIN' || upperClean.endsWith(' BEGIN')) inBeginEndBlock++;
-      if (upperClean === 'END' || upperClean.endsWith(' END')) inBeginEndBlock = Math.max(0, inBeginEndBlock - 1);
+      // Track BEGIN...END for procedures/triggers
+      const upperLine = trimmed.toUpperCase();
+      // Use regex to avoid matching BEGIN/END inside other words
+      if (/\bBEGIN\b/.test(upperLine)) inBeginEndBlock++;
+      if (/\bEND\b/.test(upperLine)) inBeginEndBlock--;
 
       buffer.push(line);
 
-      // Check if line ends with the current delimiter
-      // If we are in a BEGIN...END block and the delimiter is still ';', we wait for the final END
-      const isActuallyDelimited = trimmed.endsWith(currentDelimiter) && (currentDelimiter !== ';' || inBeginEndBlock === 0);
+      // Check if statement is complete
+      const isActuallyDelimited = trimmed.endsWith(currentDelimiter) && (currentDelimiter !== ';' || inBeginEndBlock <= 0);
 
       if (isActuallyDelimited) {
         let stmt = buffer.join('\n').trim();
-
-        // Remove the delimiter from the end of the statement
         if (stmt.endsWith(currentDelimiter)) {
-          stmt = stmt.slice(0, -currentDelimiter.length).trim();
+          stmt = stmt.substring(0, stmt.length - currentDelimiter.length).trim();
         }
 
         if (stmt) {
-          if (global.logger) global.logger.info(`[DumpDriver] Processing statement: ${stmt.substring(0, 50)}...`);
           this._processStatement(stmt);
         }
+
         buffer = [];
         inBeginEndBlock = 0;
       }
@@ -164,57 +166,46 @@ class DumpDriver extends IDatabaseDriver {
   }
 
   _processStatement(stmt) {
-    // Normalize whitespace for type detection
     const normalized = stmt.replace(/\s+/g, ' ');
-
-    // Improved regex to handle DEFINER, ALGORITHM, SQL SECURITY in any order
-    // These clauses can appear in various orders depending on MySQL version and dump tool
-    const createMatch = normalized.match(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:DEFINER\s*=\s*\S+|ALGORITHM\s*=\s*\S+|SQL\s+SECURITY\s+\S+)\s+)*(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|EVENT)\s+/i);
+    // Handle CREATE ... [IF NOT EXISTS] [database.]name
+    // Improved Regex:
+    // 1. Handles Optional Modifiers (DEFINER, ALGORITHM etc) including quoted values
+    // 2. Handles Spaces in Names (backticked)
+    // 3. Handles IF NOT EXISTS
+    const createMatch = normalized.match(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:DEFINER\s*=\s*(?:'[^']+'|`[^`]+`|\S+)|ALGORITHM\s*=\s*\S+|SQL\s+SECURITY\s+\S+)\s+)*(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|EVENT)\s+(?:IF\s+NOT\s+EXISTS\s+)?((?:`[^`]+`)|(?:[^\s\(\)]+))/i);
 
     if (!createMatch) {
-      if (global.logger) global.logger.warn(`[DumpDriver] Statement skipped (no CREATE match): ${normalized.substring(0, 50)}...`);
       return;
     }
 
-    let type = createMatch[1].toUpperCase();
-    if (global.logger) global.logger.info(`[DumpDriver] Matched type: ${type}`);
-
-    const typeMap = {
+    const typeKey = createMatch[1].toUpperCase();
+    const targetType = {
       'TABLE': TABLES,
       'VIEW': VIEWS,
       'PROCEDURE': PROCEDURES,
       'FUNCTION': FUNCTIONS,
       'TRIGGER': TRIGGERS,
       'EVENT': EVENTS
-    };
+    }[typeKey];
 
-    const targetType = typeMap[type];
-    const name = this._extractName(stmt);
+    let rawName = createMatch[2];
+    const name = this._extractName(rawName);
 
     if (name && targetType && this.data[targetType]) {
+      // Always end DDL with ; for consistency
       this.data[targetType].set(name, stmt + ';');
-      if (global.logger) global.logger.info(`[DumpDriver] Added ${type}: ${name}`);
-    } else {
-      if (global.logger) global.logger.warn(`[DumpDriver] Failed to extract name or invalid type. Name: ${name}, Type: ${targetType}`);
     }
   }
 
-  _extractName(stmt) {
-    // Clean up statement for easier name extraction
-    // 1. Remove everything up to the type keyword and IF NOT EXISTS
-    const typesPattern = '(?:TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|EVENT)';
-    const cleanPattern = new RegExp(`^.*?CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:.*?\\s+)?${typesPattern}\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`, 'i');
-    const namePart = stmt.replace(cleanPattern, '').trim();
-
-    // 2. Extract name (handles `db`.`table`, `table`, table, etc)
-    const nameMatch = namePart.match(/^(?:`([^`]+)`|([a-zA-Z0-9_\$]+))\.(?:`([^`]+)`|([a-zA-Z0-9_\$]+))/i) ||
-      namePart.match(/^(?:`([^`]+)`|([a-zA-Z0-9_\$]+))/i);
-
-    if (nameMatch) {
-      // If qualified (db.table), index 3 or 4 is the table name. If not, index 1 or 2 is the name.
-      return nameMatch[3] || nameMatch[4] || nameMatch[1] || nameMatch[2];
+  _extractName(rawName) {
+    if (!rawName) return null;
+    // Remove quotes/backticks
+    let name = rawName.replace(/[`"']/g, '');
+    // Remove database prefix if exists (db.table -> table)
+    if (name.includes('.')) {
+      name = name.split('.').pop();
     }
-    return null;
+    return name;
   }
 }
 
@@ -224,6 +215,7 @@ class DumpIntrospectionService extends IIntrospectionService {
   }
 
   async _list(type, pattern) {
+    if (!this.driver.data[type]) return [];
     const names = Array.from(this.driver.data[type].keys());
     if (!pattern) return names;
     const regex = new RegExp(pattern.replace(/%/g, '.*'), 'i');
