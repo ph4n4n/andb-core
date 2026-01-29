@@ -3,14 +3,21 @@ import { ConnectionType, IDatabaseConfig } from '../../common/interfaces/connect
 import { MysqlDriver } from './mysql/mysql.driver';
 import { DriverFactoryService } from './driver-factory.service';
 import { ParserModule } from '../parser/parser.module';
+import { DRIVER_FACTORY_SERVICE } from '../../common/constants/tokens';
 
 export const DATABASE_DRIVER = 'DATABASE_DRIVER';
 
 @Global()
 @Module({
   imports: [ParserModule],
-  providers: [DriverFactoryService],
-  exports: [DriverFactoryService],
+  providers: [
+    DriverFactoryService,
+    {
+      provide: DRIVER_FACTORY_SERVICE,
+      useExisting: DriverFactoryService,
+    },
+  ],
+  exports: [DriverFactoryService, DRIVER_FACTORY_SERVICE],
 })
 export class DriverModule {
   static forRoot(type: ConnectionType, config: IDatabaseConfig): DynamicModule {

@@ -5,7 +5,7 @@
   "author": "The Andb (ph4n4n)",
   "private": true,
   "license": "MIT",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "bin": {
     "andb": "dist/cli/main.js"
   },

@@ -12,6 +12,7 @@ import { ProjectConfigModule } from './modules/config/project-config.module';
 import { ExporterModule } from './modules/exporter/exporter.module';
 import { ReporterModule } from './modules/reporter/reporter.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { OrchestrationModule } from './modules/orchestration/orchestration.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { StorageModule } from './modules/storage/storage.module';
     ExporterModule,
     ReporterModule,
     StorageModule,
+    OrchestrationModule,
   ],
   controllers: [],
   providers: [
