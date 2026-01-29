@@ -1,0 +1,12 @@
+dist
+node_modules
+test
+**/*spec.ts
+**/*.spec.ts
+coverage
+report
+*.js
+!.eslintrc.js
+!copy-assets.js
+!scripts/*.js
+

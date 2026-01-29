@@ -1,0 +1,61 @@
+# compiled output
+/dist
+/node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+
+# Tests
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# report
+report
+/map-migrate
+
+# misc
+/db
+.history/*
+.env
+.env.*
+! .env.example
+ecosystem.config.js
+
+# package-lock
+# Usually we track package-lock, but keeping it as is if user preferred. 
+# Actually, it's better to track it. I'll comment it out or remove it from ignore.
+# package-lock.json
+
+# NestJS specific
+Thumbs.db
+db.sqlite
+dump.sql
+
+# Cursor
+.cursor/
+.antigravity/
+.agent/
