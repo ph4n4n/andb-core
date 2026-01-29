@@ -18,6 +18,19 @@ Built for modern DevOps workflows, it transforms database synchronization from a
 - 🛡️ **Session Hygiene**: Automatic handling of foreign key checks and session modes for safe migrations.
 - 🔌 **Extensible**: Designed to support MySQL/MariaDB out of the box, with a clear roadmap for PostgreSQL.
 
+## 📦 Core vs. CLI: Which one to choose?
+
+While both packages provide the `andb` command, they serve different purposes:
+
+| Feature      | `@the-andb/core` (**The Brain**)      | `@the-andb/cli` (**The Orchestrator**)    |
+| :----------- | :------------------------------------ | :---------------------------------------- |
+| **Best For** | Internal integration / Custom scripts | Rapid setup / Project orchestration       |
+| **Logic**    | Full Engine (Stateless)               | Thin Wrapper + Interactive Helpers        |
+| **Workflow** | Raw commands (`export`, `compare`)    | High-level commands (`init`, `generate`)  |
+| **Setup**    | Manual configuration                  | **Interactive questioning** (`andb init`) |
+
+**Recommendation**: Use `@the-andb/cli` globally for your daily tasks, and use `@the-andb/core` as a local dependency if you are building custom automation or need the library's internal APIs.
+
 ## 🚀 Quick Start
 
 ### Installation

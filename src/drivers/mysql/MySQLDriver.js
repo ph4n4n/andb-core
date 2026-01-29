@@ -11,7 +11,7 @@ class MySQLDriver extends IDatabaseDriver {
 
   async connect() {
     this.connection = mysql.createConnection({
-      host: this.config.host,
+      host: this.config.host === 'localhost' ? '127.0.0.1' : this.config.host,
       database: this.config.database,
       user: this.config.user,
       password: this.config.password,
@@ -40,11 +40,20 @@ class MySQLDriver extends IDatabaseDriver {
 
   async disconnect() {
     if (this.connection) {
-      return new Promise((resolve, reject) => {
-        this.connection.end(err => {
-          if (err) reject(err);
-          else resolve();
-        });
+      return new Promise((resolve) => {
+        try {
+          this.connection.end(err => {
+            if (err) {
+              // If end() complains (e.g. already closed), ensuring it's destroyed is enough
+              this.connection.destroy();
+            }
+            resolve();
+          });
+        } catch (e) {
+          // Sync error (e.g. connection already closed)
+          this.connection.destroy();
+          resolve();
+        }
       });
     }
   }
@@ -208,7 +217,7 @@ class MySQLIntrospectionService extends IIntrospectionService {
   // Helper to normalize DDL using Driver's parser
   _normalizeDDL(ddl) {
     if (!ddl) return null;
-    return this.parser.normalize(ddl);
+    return this.parser.clean(ddl);
   }
 
   async getChecksums(dbName) {

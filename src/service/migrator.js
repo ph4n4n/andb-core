@@ -559,6 +559,12 @@ module.exports = class MigratorService {
 
       const driver = await this.driver(dbConfig);
 
+      // DBA Rule: Cannot migrate into a static SQL Dump driver
+      if (driver.config?.type === 'dump') {
+        await driver.disconnect();
+        throw new Error(`Migration forbidden: Target connection is a static SQL Dump file. Sync operations are only allowed on live database servers.`);
+      }
+
       try {
         let rs = 0;
         let alterRs = 0;

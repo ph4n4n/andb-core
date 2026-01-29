@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2026-01-28
+
+### Fixed
+
+- **Unit Test Suite**: Fixed `_extractName()` test cases that were incorrectly passing full SQL statements instead of raw name values. All 90 tests now pass.
+- **Clean Test Output**: Silenced `better-sqlite3` mismatch console errors in test output. Tests gracefully skip SQLite-dependent scenarios in mixed Node.js environments without noisy logs.
+- **Publish Readiness**: Ensured `npm publish` workflow is clean with all tests passing and proper package configuration.
+
+### Improved
+
+- **DumpDriver Parsing**: Enhanced documentation for internal `_extractName()` method clarifying its role in processing regex-captured names.
+- **Test Coverage**: Added additional edge case tests including null input handling and double-quoted name support.
+
+---
+
 ## [3.0.0] - 2026-01-21
 
 ### Added
@@ -64,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Script generator for npm scripts
 - Helper utilities
 
+[3.0.3]: https://github.com/The-Andb/andb-core/releases/tag/v3.0.3
 [3.0.0]: https://github.com/The-Andb/andb-core/releases/tag/v3.0.0
 [2.1.0]: https://github.com/The-Andb/andb-core/releases/tag/v2.1.0
 [1.0.0-beta.1]: https://github.com/The-Andb/andb-core/releases/tag/v1.0.0-beta.1

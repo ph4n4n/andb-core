@@ -58,6 +58,28 @@ class MySQLDDLGenerator extends IDDLGenerator {
     };
   }
 
+  /**
+   * Normalize a column or index definition string for comparison
+   */
+  _normalizeDef(def) {
+    if (!def) return '';
+    let processed = def.replace(/,$/, '').trim();
+
+    // 1. Normalize Integer Types (MySQL 8.0 ignores display width)
+    processed = processed.replace(/(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT)\(\d+\)/gi, "$1");
+
+    // 2. Clear MySQL Version Comments: /*!50003 ... */ -> ...
+    processed = processed.replace(/\/\*!\d+\s*([^/]+)\*\//g, "$1");
+
+    // 3. Normalize spacing and casing
+    processed = processed.toUpperCase().replace(/\s+/g, ' ').trim();
+
+    // 4. Normalize backticks - standard in core
+    // Consistency is handled by uppercase + space collapse
+
+    return processed;
+  }
+
   compareColumns(srcTable, destTable) {
     const alterColumns = [];
     const missingColumns = [];
@@ -79,23 +101,20 @@ class MySQLDDLGenerator extends IDDLGenerator {
       const srcColumnDef = srcTable.columns[srcColName];
       const destColumnDef = destTable.columns[srcColName];
 
-      if (srcColumnDef === destColumnDef) continue;
+      const normSrc = this._normalizeDef(srcColumnDef);
+      const normDest = this._normalizeDef(destColumnDef);
 
-      // detect source collation not defined
+      if (normSrc === normDest) continue;
+
+      // detect source collation not defined - Legacy support but using normalization now
       const srcCollation = srcColumnDef.match(/COLLATE\s+(\w+)/)?.[1];
       if (srcCollation === undefined) {
         const destCollation = destColumnDef.match(/COLLATE\s+(\w+)/)?.[1];
-        if (destCollation === 'latin1_swedish_ci') continue;
-
-        alterColumns.push(`MODIFY COLUMN ${srcColumnDef
-          .replace(/\,$/, ` COLLATE latin1_swedish_ci,`)
-          .replace(/ DEFAULT NULL/, '')
-          }`);
-        continue;
+        if (destCollation === 'latin1_swedish_ci') continue; // Skip if it's just the default legacy collation
       }
 
       // Column definition has changed
-      alterColumns.push(`MODIFY COLUMN ${srcColumnDef.replace(/ DEFAULT NULL/, '')}`);
+      alterColumns.push(`MODIFY COLUMN ${srcColumnDef.replace(/ DEFAULT NULL/gi, '').replace(/,$/, '')}`);
     }
 
     // Check for deprecated columns
@@ -120,7 +139,10 @@ class MySQLDDLGenerator extends IDDLGenerator {
         alterIndexes.push(`ADD ${srcDef}`);
       } else {
         const destDef = destTable.indexes[indexName].replace(/,$/, '').trim();
-        if (srcDef !== destDef) {
+        const normSrc = this._normalizeDef(srcDef);
+        const normDest = this._normalizeDef(destDef);
+
+        if (normSrc !== normDest) {
           alterIndexes.push(`DROP INDEX \`${indexName}\``);
           alterIndexes.push(`ADD ${srcDef}`);
         }
