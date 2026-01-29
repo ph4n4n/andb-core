@@ -12,12 +12,20 @@ async function runRealWorldTest() {
   console.log('🚀 Starting Real World Dump Test');
   console.log('------------------------------------------------');
 
-  const f1Path = path.resolve(__dirname, '../../f1.sql');
-  const f2Path = path.resolve(__dirname, '../../f2.sql');
+  const f1Path = path.join(process.cwd(), 'scripts', 'f1.sql');
+  const ddl2File = path.join(process.cwd(), 'scripts', 'f2.sql');
+
+  const parser = new ParserService();
 
   // 1. Initialize Drivers for f1 and f2
-  const driver1 = new DumpDriver({ host: f1Path, user: '', password: '', database: '', port: 0 });
-  const driver2 = new DumpDriver({ host: f2Path, user: '', password: '', database: '', port: 0 });
+  const driver1 = new DumpDriver(
+    { host: f1Path, user: '', password: '', database: '', port: 0 },
+    parser,
+  );
+  const driver2 = new DumpDriver(
+    { host: ddl2File, user: '', password: '', database: '', port: 0 },
+    parser,
+  );
 
   await driver1.connect();
   await driver2.connect();
@@ -26,7 +34,6 @@ async function runRealWorldTest() {
   console.log(`✅ Loaded f2.sql: ${driver2.data.TABLES.size} tables`);
 
   // 2. Initialize Services
-  const parser = new ParserService();
   const comparator = new ComparatorService(parser);
   const migrator = new MigratorService();
 

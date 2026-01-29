@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { IDatabaseConfig, ConnectionType } from '../../common/interfaces/connection.interface';
 import { MysqlDriver } from './mysql/mysql.driver';
@@ -15,7 +14,7 @@ export class DriverFactoryService {
       return new MysqlDriver(config);
     }
 
-    if (type === 'dump') {
+    if (type === ConnectionType.DUMP) {
       return new DumpDriver(config, this.parser);
     }
 

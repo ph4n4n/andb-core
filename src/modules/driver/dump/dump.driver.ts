@@ -21,13 +21,12 @@ export class DumpDriver implements IDatabaseDriver {
     TRIGGERS: new Map(),
     EVENTS: new Map(),
   };
-
-  private parserService: ParserService;
   private introspectionService?: IIntrospectionService;
 
-  constructor(private readonly config: IDatabaseConfig) {
-    this.parserService = new ParserService();
-  }
+  constructor(
+    private readonly config: IDatabaseConfig,
+    private readonly parserService: ParserService,
+  ) { }
 
   async connect(): Promise<void> {
     // DumpPath is usually passed via host or a specific field if we extended the interface
@@ -39,7 +38,7 @@ export class DumpDriver implements IDatabaseDriver {
 
     // Check if IDatabaseDriver has arbitrary props? It is strict.
     // We will cast config for now or assume host is the path.
-    const dumpPath = this.config.host;
+    const dumpPath = (this.config as any).path || this.config.host || this.config.database;
 
     if (!dumpPath) {
       throw new Error('Dump file path is required (in host field)');
@@ -77,7 +76,7 @@ export class DumpDriver implements IDatabaseDriver {
     if (!this.introspectionService) {
       this.introspectionService = new DumpIntrospectionService(this);
     }
-    return this.introspectionService;
+    return this.introspectionService!;
   }
 
   getMonitoringService(): IMonitoringService {

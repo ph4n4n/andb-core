@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://code.highcharts.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; connect-src *;">
+  <title>The Andb - Sync Report: DUMP2 -> DUMP1</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <!-- Libraries via CDN for reliability -->
+  <script src="https://code.highcharts.com/highcharts.js"></script>
+  <script src="https://code.highcharts.com/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #6366F1;
+      --primary-glow: rgba(99, 102, 241, 0.3);
+      --bg: #0F172A;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --border: #334155;
+      --green: #10B981;
+      --blue: #3B82F6;
+      --red: #EF4444;
+      --orange: #F59E0B;
+      --purple: #A855F7;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: 80px;
+      background-image:
+        radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.1) 0%, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    header {
+      padding: 1.5rem 3rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 1.5rem;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .report-title h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(to right, #fff, #94A3B8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .report-title p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 2.5rem auto;
+      padding: 0 2rem;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 1.75rem;
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: transparent;
+      transition: background 0.3s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--primary);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .stat-card.new:hover::after {
+      background: var(--green);
+    }
+
+    .stat-card.updated:hover::after {
+      background: var(--blue);
+    }
+
+    .stat-card.deprecated:hover::after {
+      background: var(--red);
+    }
+
+    .stat-card h4 {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.75rem;
+    }
+
+    .stat-card .value {
+      font-size: 2.75rem;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+
+    .stat-card .trend {
+      font-size: 0.8rem;
+      margin-top: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Chart Section */
+    .chart-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 2.5rem;
+      margin-bottom: 2.5rem;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    }
+
+    #container {
+      height: 400px;
+      width: 100%;
+    }
+
+    /* Tabs/Grid Styling */
+    .sections-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+      gap: 2rem;
+    }
+
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .section-header {
+      padding: 1.5rem 2rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section-header h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill {
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .ddl-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 1.5rem;
+      gap: 1.5rem;
+      flex-grow: 1;
+    }
+
+    .ddl-pane {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 16px;
+      padding: 1.25rem;
+      border: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+
+    .ddl-pane:hover {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .ddl-pane h4 {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }
+
+    .ddl-pane h4::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .pane-new h4::before {
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+    }
+
+    .pane-updated h4::before {
+      background: var(--blue);
+      box-shadow: 0 0 10px var(--blue);
+    }
+
+    .pane-deprecated h4::before {
+      background: var(--red);
+      box-shadow: 0 0 10px var(--red);
+    }
+
+    .obj-list {
+      list-style: none;
+    }
+
+    .obj-list li {
+      padding: 0.6rem 0.8rem;
+      border-radius: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+      transition: all 0.2s;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+    }
+
+    .obj-list li:hover {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.3);
+      transform: translateX(4px);
+    }
+
+    .obj-list a {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .missing-cols {
+      background: rgba(245, 158, 11, 0.05);
+      border: 1px dashed var(--orange);
+      padding: 1.5rem;
+      border-radius: 16px;
+      margin: 1.5rem 2rem 0 2rem;
+    }
+
+    .missing-cols h4 {
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+
+    .missing-cols pre {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1rem;
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+
+    .missing-cols code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--orange);
+    }
+
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 0.5rem;
+      font-size: 0.75rem;
+      background: transparent !important;
+      border: none !important;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    @media (max-width: 1200px) {
+      .sections-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .ddl-grid {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        padding: 1rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="logo-container">
+      <div class="logo-icon">A</div>
+      <div class="report-title">
+        <h1>THE ANDB ORCHESTRATOR</h1>
+        <p>Sync Intelligence Report • DUMP2 -> DUMP1</p>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span class="pill" style="border: 1px solid var(--primary); color: var(--primary); background: transparent">SYSTEM
+        REPORT</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h4>Sync Status</h4>
+        <div class="value" id="status-text">Analyzing</div>
+        <div class="trend" id="sync-trend">
+          <span style="color: var(--blue)">● Schema Intelligence Active</span>
+        </div>
+      </div>
+      <div class="stat-card new">
+        <h4>Created Objects</h4>
+        <div class="value" style="color: var(--green)" id="new-count">0</div>
+        <div class="trend" style="color: var(--green)">↑ Newly added structural units</div>
+      </div>
+      <div class="stat-card updated">
+        <h4>Modified Units</h4>
+        <div class="value" style="color: var(--blue)" id="updated-count">0</div>
+        <div class="trend" style="color: var(--blue)">↻ Detected structural mutations</div>
+      </div>
+      <div class="stat-card deprecated">
+        <h4>Terminated</h4>
+        <div class="value" style="color: var(--red)" id="deprecated-count">0</div>
+        <div class="trend" style="color: var(--red)">↓ Scheduled for removal</div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div id="container"></div>
+    </div>
+
+    <div class="sections-container">
+      <!-- Tables Section -->
+      <section class="section-card">
+        <div class="section-header">
+          <h3>TABLES</h3>
+          <span class="pill">CORE STORAGE</span>
+        </div>
+        <div id="missing-cols-wrapper" style="display:none">
+          <div class="missing-cols">
+            <h4 style="color: var(--orange);">Missing Structural Mapping</h4>
+            <pre><code class="json">{}</code></pre>
+          </div>
+        </div>
+        <div class="ddl-grid">
+          <div class="ddl-pane pane-new">
+            <h4>New</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-updated">
+            <h4>Updated</h4>
+            <ul class="obj-list"><li>products</li></ul>
+          </div>
+          <div class="ddl-pane pane-deprecated">
+            <h4>Deprecated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Views Section -->
+      <section class="section-card">
+        <div class="section-header">
+          <h3>VIEWS</h3>
+          <span class="pill">VIRTUAL SCHEMAS</span>
+        </div>
+        <div class="ddl-grid">
+          <div class="ddl-pane pane-new">
+            <h4>New</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-updated">
+            <h4>Updated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-deprecated">
+            <h4>Deprecated</h4>
+            <ul class="obj-list"><li>v_users</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Procedures Section -->
+      <section class="section-card">
+        <div class="section-header">
+          <h3>PROCEDURES</h3>
+          <span class="pill">LOGIC UNITS</span>
+        </div>
+        <div class="ddl-grid">
+          <div class="ddl-pane pane-new">
+            <h4>New</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-updated">
+            <h4>Updated</h4>
+            <ul class="obj-list"><li>get_user</li></ul>
+          </div>
+          <div class="ddl-pane pane-deprecated">
+            <h4>Deprecated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Functions Section -->
+      <section class="section-card">
+        <div class="section-header">
+          <h3>FUNCTIONS</h3>
+          <span class="pill">ATOMIC LOGIC</span>
+        </div>
+        <div class="ddl-grid">
+          <div class="ddl-pane pane-new">
+            <h4>New</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-updated">
+            <h4>Updated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-deprecated">
+            <h4>Deprecated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Triggers Section -->
+      <section class="section-card">
+        <div class="section-header">
+          <h3>TRIGGERS</h3>
+          <span class="pill">EVENT HOOKS</span>
+        </div>
+        <div class="ddl-grid">
+          <div class="ddl-pane pane-new">
+            <h4>New</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-updated">
+            <h4>Updated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-deprecated">
+            <h4>Deprecated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Events Section -->
+      <section class="section-card">
+        <div class="section-header">
+          <h3>EVENTS</h3>
+          <span class="pill">SCHEDULER</span>
+        </div>
+        <div class="ddl-grid">
+          <div class="ddl-pane pane-new">
+            <h4>New</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-updated">
+            <h4>Updated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+          <div class="ddl-pane pane-deprecated">
+            <h4>Deprecated</h4>
+            <ul class="obj-list"><li class="empty-state">No changes</li></ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const categories = JSON.parse('["Tables","Views","Procedures","Functions","Triggers","Events"]');
+    const totalData = JSON.parse('[0,0,0,0,0,0]');
+    const newData = JSON.parse('[0,0,0,0,0,0]');
+    const updatedData = JSON.parse('[1,0,1,0,0,0]');
+    const deprecatedData = JSON.parse('[0,1,0,0,0,0]');
+
+    // Update Stats
+    document.getElementById('new-count').textContent = newData.reduce((a, b) => (typeof b === 'number' ? a + b : a), 0);
+    document.getElementById('updated-count').textContent = updatedData.reduce((a, b) => (typeof b === 'number' ? a + b : a), 0);
+    document.getElementById('deprecated-count').textContent = deprecatedData.reduce((a, b) => (typeof b === 'number' ? a + b : a), 0);
+
+    const isSync = (newData.concat(updatedData).concat(deprecatedData).every(v => v === 0 || v === '-'));
+    if (isSync) {
+      document.getElementById('status-text').textContent = 'In Sync';
+      document.getElementById('status-text').style.color = 'var(--green)';
+      document.getElementById('sync-trend').innerHTML = '<span style="color: var(--green)">● All environments matching perfectly</span>';
+    } else {
+      document.getElementById('status-text').textContent = 'Divergent';
+      document.getElementById('status-text').style.color = 'var(--orange)';
+    }
+
+    // Chart Configuration
+    Highcharts.chart('container', {
+      chart: { type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
+      title: { text: null },
+      xAxis: {
+        categories: categories,
+        title: { text: null },
+        gridLineWidth: 1,
+        gridLineColor: 'rgba(255,255,255,0.05)',
+        lineWidth: 0,
+        labels: { style: { color: 'var(--text-muted)', fontSize: '11px', fontWeight: '600' } }
+      },
+      yAxis: {
+        min: 0,
+        title: { text: 'OBJECT COUNT', align: 'high', style: { color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.1em' } },
+        labels: { overflow: 'justify', style: { color: 'var(--text-muted)' } },
+        gridLineWidth: 1,
+        gridLineColor: 'rgba(255,255,255,0.05)'
+      },
+      tooltip: {
+        backgroundColor: '#1E293B',
+        style: { color: '#F8FAFC' },
+        borderWidth: 0,
+        borderRadius: 12,
+        shared: true,
+        shadow: true
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: 6,
+          dataLabels: { enabled: true, style: { color: 'var(--text)', textOutline: 'none', fontSize: '11px' } },
+          groupPadding: 0.15,
+          borderWidth: 0
+        }
+      },
+      legend: {
+        itemStyle: { color: 'var(--text-muted)', fontSize: '11px', fontWeight: '600' },
+        itemHoverStyle: { color: 'var(--text)' },
+        align: 'right',
+        verticalAlign: 'top',
+        layout: 'horizontal'
+      },
+      credits: { enabled: false },
+      series: [
+        { name: 'Total', data: totalData, color: 'rgba(255,255,255,0.1)' },
+        { name: 'New', data: newData, color: 'var(--green)' },
+        { name: 'Updated', data: updatedData, color: 'var(--blue)' },
+        { name: 'Deprecated', data: deprecatedData, color: 'var(--red)' }
+      ]
+    });
+
+    // Simple cleaner for "None" lists and Highlight code
+    document.addEventListener('DOMContentLoaded', (event) => {
+      document.querySelectorAll('.obj-list').forEach(ul => {
+        if (ul.innerHTML.trim() === '' || ul.textContent.trim() === 'None') {
+          ul.innerHTML = '<li class="empty-state">No changes detected</li>';
+        }
+      });
+
+      if (typeof hljs !== 'undefined') {
+        hljs.highlightAll();
+      }
+    });
+  </script>
+</body>
+
+</html>

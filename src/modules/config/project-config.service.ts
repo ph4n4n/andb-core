@@ -1,9 +1,8 @@
-
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { IDatabaseConfig } from '../../common/interfaces/connection.interface';
+import { IDatabaseConfig, ConnectionType } from '../../common/interfaces/connection.interface';
 
 @Injectable()
 export class ProjectConfigService {
@@ -44,7 +43,28 @@ export class ProjectConfigService {
     return config?.database || 'unknown';
   }
 
+  getConnection(env: string): { type: ConnectionType; config: IDatabaseConfig } | null {
+    const dbConfig = this.getDBDestination(env);
+    if (!dbConfig) return null;
+
+    return {
+      type: (dbConfig as any).type || ConnectionType.MYSQL,
+      config: dbConfig,
+    };
+  }
+
   getDomainNormalization() {
     return this.config.domainNormalization || { pattern: /(?!)/, replacement: '' };
+  }
+
+  setConnection(env: string, config: IDatabaseConfig, type: ConnectionType = ConnectionType.MYSQL) {
+    if (!this.config.getDBDestination) {
+      this.config.getDBDestination = {};
+    }
+    this.config.getDBDestination[env] = { ...config, type };
+  }
+
+  setDomainNormalization(pattern: RegExp, replacement: string) {
+    this.config.domainNormalization = { pattern, replacement };
   }
 }

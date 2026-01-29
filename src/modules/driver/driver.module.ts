@@ -2,11 +2,13 @@ import { Module, DynamicModule, Global } from '@nestjs/common';
 import { ConnectionType, IDatabaseConfig } from '../../common/interfaces/connection.interface';
 import { MysqlDriver } from './mysql/mysql.driver';
 import { DriverFactoryService } from './driver-factory.service';
+import { ParserModule } from '../parser/parser.module';
 
 export const DATABASE_DRIVER = 'DATABASE_DRIVER';
 
 @Global()
 @Module({
+  imports: [ParserModule],
   providers: [DriverFactoryService],
   exports: [DriverFactoryService],
 })

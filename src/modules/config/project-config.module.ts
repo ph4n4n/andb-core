@@ -1,4 +1,3 @@
-
 import { Module, Global } from '@nestjs/common';
 import { ProjectConfigService } from './project-config.service';
 
@@ -7,4 +6,4 @@ import { ProjectConfigService } from './project-config.service';
   providers: [ProjectConfigService],
   exports: [ProjectConfigService],
 })
-export class ProjectConfigModule { }
+export class ProjectConfigModule {}

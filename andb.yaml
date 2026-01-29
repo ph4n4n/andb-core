@@ -1,0 +1,11 @@
+ENVIRONMENTS: ['DUMP1', 'DUMP2']
+
+getDBDestination:
+  DUMP1:
+    type: dump
+    host: ./scripts/f1.sql
+    database: f1_db
+  DUMP2:
+    type: dump
+    host: ./scripts/f2.sql
+    database: f2_db

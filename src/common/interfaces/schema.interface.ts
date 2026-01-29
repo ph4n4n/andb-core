@@ -1,31 +1,31 @@
 export interface ITableDefinition {
   name: string;
-  schema?: string; // e.g. 'public' in PG, or db name in MySQL
+  schema?: string;
   columns: IColumnDefinition[];
   indexes: IIndexDefinition[];
   foreignKeys: IForeignKeyDefinition[];
-  options?: ITableOptions; // engine, charset, collation
-  ddl?: string; // The raw CREATE TABLE statement
+  options?: ITableOptions;
+  ddl?: string;
 }
 
 export interface IColumnDefinition {
   name: string;
-  type: string; // e.g. 'VARCHAR(255)'
-  isNullable: boolean; // boolean
+  type: string;
+  isNullable: boolean;
   isPrimaryKey: boolean;
   defaultValue?: string | null;
   comment?: string;
   autoIncrement?: boolean;
   charset?: string;
   collation?: string;
-  extra?: string; // e.g. 'ON UPDATE CURRENT_TIMESTAMP'
+  extra?: string;
 }
 
 export interface IIndexDefinition {
   name: string;
-  columns: string[]; // column names
+  columns: string[];
   isUnique: boolean;
-  type?: string; // BTREE, FULLTEXT, etc.
+  type?: string;
   algorythm?: string;
   comment?: string;
 }
@@ -36,7 +36,7 @@ export interface IForeignKeyDefinition {
   referencedSchema?: string;
   referencedTable: string;
   referencedColumn: string;
-  onUpdate?: string; // CASCADE, RESTRICT, SET NULL, NO ACTION
+  onUpdate?: string;
   onDelete?: string;
 }
 
@@ -53,10 +53,10 @@ export interface IViewDefinition {
   name: string;
   schema?: string;
   ddl: string;
-  algorithm?: string; // UNDEFINED, MERGE, TEMPTABLE
+  algorithm?: string;
   definer?: string;
-  securityType?: string; // DEFINER, INVOKER
-  checkOption?: string; // CASCADED, LOCAL
+  securityType?: string;
+  checkOption?: string;
 }
 
 export interface IRoutineDefinition {
@@ -69,8 +69,8 @@ export interface IRoutineDefinition {
   dataAccess?: 'CONTAINS SQL' | 'NO SQL' | 'READS SQL DATA' | 'MODIFIES SQL DATA';
   securityType?: string;
   comment?: string;
-  params?: string; // Raw parameter string for now
-  returns?: string; // Return type for functions
+  params?: string;
+  returns?: string;
 }
 
 export interface ITriggerDefinition {
@@ -90,4 +90,38 @@ export interface IEventDefinition {
   schedule?: string;
   status?: 'ENABLE' | 'DISABLE' | 'SLAVESIDE_DISABLED';
   onCompletion?: 'PRESERVE' | 'NOT PRESERVE';
+}
+
+// Diff related
+export interface IDiffOperation {
+  type: 'ADD' | 'DROP' | 'MODIFY' | 'CHANGE';
+  target: 'TABLE' | 'COLUMN' | 'INDEX' | 'FOREIGN_KEY' | 'OPTION' | 'TRIGGER' | 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'EVENT';
+  name: string;
+  tableName?: string;
+  definition?: string;
+  oldDefinition?: string;
+}
+
+export interface ITableDiff {
+  tableName: string;
+  operations: IDiffOperation[];
+  hasChanges: boolean;
+}
+
+export interface IObjectDiff {
+  type: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'EVENT' | 'TRIGGER';
+  name: string;
+  operation: 'CREATE' | 'DROP' | 'REPLACE';
+  definition?: string;
+}
+
+export interface ISchemaDiff {
+  tables: Record<string, ITableDiff>;
+  droppedTables: string[];
+  objects: IObjectDiff[];
+  summary: {
+    totalChanges: number;
+    tablesChanged: number;
+    objectsChanged: number;
+  };
 }

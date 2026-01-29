@@ -6,6 +6,7 @@ export enum ConnectionType {
   MARIADB = 'mariadb',
   POSTGRES = 'postgres',
   SQLITE = 'sqlite',
+  DUMP = 'dump',
 }
 
 export interface IConnection {

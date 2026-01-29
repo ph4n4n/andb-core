@@ -1,12 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ParserService } from '../parser/parser.service';
-import { IDiffOperation, ITableDiff, IObjectDiff } from '../../common/interfaces/diff.interface';
+import {
+  IDiffOperation,
+  ITableDiff,
+  IObjectDiff,
+  ISchemaDiff,
+} from '../../common/interfaces/diff.interface';
+import { IIntrospectionService } from '../../common/interfaces/driver.interface';
 
 @Injectable()
 export class ComparatorService {
   private readonly logger = new Logger(ComparatorService.name);
 
-  constructor(private readonly parser: ParserService) {}
+  constructor(private readonly parser: ParserService) { }
 
   /**
    * Compare two CREATE TABLE statements and return differences
@@ -224,12 +230,150 @@ export class ComparatorService {
       srcTrigger.event !== destTrigger.event ||
       srcTrigger.tableName !== destTrigger.tableName ||
       this.parser.normalize(srcDDL, { ignoreDefiner: true, ignoreWhitespace: true }) !==
-        this.parser.normalize(destDDL, { ignoreDefiner: true, ignoreWhitespace: true });
+      this.parser.normalize(destDDL, { ignoreDefiner: true, ignoreWhitespace: true });
 
     if (hasChanges) {
       return { type: 'TRIGGER', name, operation: 'REPLACE', definition: srcDDL };
     }
 
     return null;
+  }
+
+  /**
+   * Compare full schema between source and destination
+   */
+  async compareSchema(
+    src: IIntrospectionService,
+    dest: IIntrospectionService,
+    dbName: string,
+  ): Promise<ISchemaDiff> {
+    const diff: ISchemaDiff = {
+      tables: {},
+      droppedTables: [],
+      objects: [],
+      summary: {
+        totalChanges: 0,
+        tablesChanged: 0,
+        objectsChanged: 0,
+      },
+    };
+
+    // 1. Compare Tables
+    const srcTables = await src.listTables(dbName);
+    const destTables = await dest.listTables(dbName);
+
+    // New or Change
+    for (const tableName of srcTables) {
+      const srcDDL = await src.getTableDDL(dbName, tableName);
+      const destDDL = await dest.getTableDDL(dbName, tableName);
+
+      if (!destDDL) {
+        // New table - for now handled by Migrator if we just send the diff
+        // But for parity, we should probably represent this as a CREATE statement or TableDiff
+        // In our current design, ITableDiff represents ALTERS.
+        // Let's use a special "status" or just empty destDDL for CREATE?
+        // Actually, let's just use compareTables.
+      }
+
+      const tableDiff = this.compareTables(srcDDL, destDDL);
+      if (tableDiff.hasChanges) {
+        diff.tables[tableName] = tableDiff;
+        diff.summary.tablesChanged++;
+        diff.summary.totalChanges += tableDiff.operations.length;
+      }
+    }
+
+    // Dropped
+    for (const tableName of destTables) {
+      if (!srcTables.includes(tableName)) {
+        diff.droppedTables.push(tableName);
+        diff.summary.totalChanges++;
+      }
+    }
+
+    // 2. Compare Generic Objects
+    const types: ('VIEW' | 'PROCEDURE' | 'FUNCTION' | 'EVENT')[] = [
+      'VIEW',
+      'PROCEDURE',
+      'FUNCTION',
+      'EVENT',
+    ];
+
+    for (const type of types) {
+      const srcList = await this._listObjects(src, type, dbName);
+      const destList = await this._listObjects(dest, type, dbName);
+
+      const allNames = new Set([...srcList, ...destList]);
+
+      for (const name of allNames) {
+        const srcDDL = srcList.includes(name) ? await this._getDDL(src, type, dbName, name) : '';
+        const destDDL = destList.includes(name) ? await this._getDDL(dest, type, dbName, name) : '';
+
+        const objDiff = this.compareGenericDDL(type, name, srcDDL, destDDL);
+        if (objDiff) {
+          diff.objects.push(objDiff);
+          diff.summary.objectsChanged++;
+          diff.summary.totalChanges++;
+        }
+      }
+    }
+
+    // 3. Compare Triggers
+    const srcTriggers = await src.listTriggers(dbName);
+    const destTriggers = await dest.listTriggers(dbName);
+    const allTriggers = new Set([...srcTriggers, ...destTriggers]);
+
+    for (const name of allTriggers) {
+      const srcDDL = srcTriggers.includes(name) ? await src.getTriggerDDL(dbName, name) : '';
+      const destDDL = destTriggers.includes(name) ? await dest.getTriggerDDL(dbName, name) : '';
+
+      const objDiff = this.compareTriggers(name, srcDDL, destDDL);
+      if (objDiff) {
+        diff.objects.push(objDiff);
+        diff.summary.objectsChanged++;
+        diff.summary.totalChanges++;
+      }
+    }
+
+    return diff;
+  }
+
+  private async _listObjects(
+    service: IIntrospectionService,
+    type: string,
+    dbName: string,
+  ): Promise<string[]> {
+    switch (type) {
+      case 'VIEW':
+        return service.listViews(dbName);
+      case 'PROCEDURE':
+        return service.listProcedures(dbName);
+      case 'FUNCTION':
+        return service.listFunctions(dbName);
+      case 'EVENT':
+        return service.listEvents(dbName);
+      default:
+        return [];
+    }
+  }
+
+  private async _getDDL(
+    service: IIntrospectionService,
+    type: string,
+    dbName: string,
+    name: string,
+  ): Promise<string> {
+    switch (type) {
+      case 'VIEW':
+        return service.getViewDDL(dbName, name);
+      case 'PROCEDURE':
+        return service.getProcedureDDL(dbName, name);
+      case 'FUNCTION':
+        return service.getFunctionDDL(dbName, name);
+      case 'EVENT':
+        return service.getEventDDL(dbName, name);
+      default:
+        return '';
+    }
   }
 }

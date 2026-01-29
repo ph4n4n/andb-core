@@ -1,16 +1,23 @@
-
 import { DumpDriver } from '../src/modules/driver/dump/dump.driver';
 import * as path from 'path';
+import { ParserService } from '../src/modules/parser/parser.service';
 
 async function runTest() {
   console.log('🧪 Starting Mirror Test: Dump Driver');
   const dumpFile = path.resolve(__dirname, 'test-dump.sql');
+  const parser = new ParserService();
 
   // Config host acts as file path for DumpDriver
-  const driver = new DumpDriver({
-    host: dumpFile,
-    user: '', password: '', database: '', port: 0
-  });
+  const driver = new DumpDriver(
+    {
+      host: dumpFile,
+      user: '',
+      password: '',
+      database: '',
+      port: 0,
+    },
+    parser,
+  );
 
   try {
     await driver.connect();
