@@ -1,5 +1,5 @@
 {
-  "name": "@the-andb/core",
+  "name": "@the-andb/core-legacy",
   "version": "3.0.3",
   "publishConfig": {
     "access": "public"
